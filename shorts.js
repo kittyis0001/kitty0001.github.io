@@ -76,6 +76,8 @@
   const ICON_SAVE_FILLED = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>'
   const ICON_SHARE = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
   const ICON_REPOST = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>'
+  const ICON_MORE = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>'
+  const ICON_PLAY_SMALL = '<svg viewBox="0 0 24 24" width="14" height="14" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>'
 
   // ── State ──────────────────────────────────────────────
   let allShorts        = []
@@ -457,12 +459,17 @@
           <div class="shorts-action-icon">${ICON_REPOST}</div>
           <span class="shorts-action-label">Repost</span>
         </button>
+        <button class="shorts-action-btn shorts-more-btn">
+          <div class="shorts-action-icon">${ICON_MORE}</div>
+          <span class="shorts-action-label">More</span>
+        </button>
       </div>
     `
 
     slide.querySelector('.shorts-save-btn').addEventListener('click', e => { e.stopPropagation(); toggleSaveShort(index) })
     slide.querySelector('.shorts-share-btn').addEventListener('click', e => { e.stopPropagation(); shareShort(index) })
     slide.querySelector('.shorts-repost-btn').addEventListener('click', e => { e.stopPropagation(); repostShort(index) })
+    slide.querySelector('.shorts-more-btn').addEventListener('click', e => { e.stopPropagation(); openSavedOverlay() })
 
     bindDoubleTap(slide, index)
 
@@ -480,6 +487,7 @@
     const hue = Math.abs(hash) % 360
     return `hsl(${hue}, 55%, 42%)`
   }
+  
 
   // ══════════════════════════════════════════════════════
   // INTERSECTION OBSERVER — active-slide detection
@@ -916,11 +924,19 @@
       items.forEach(short => {
         const cell = document.createElement('div')
         cell.className = 'shorts-saved-item'
-        cell.innerHTML = `<img src="${escapeAttr(short.thumbnail || '')}" alt="" loading="lazy">`
+        cell.innerHTML = `
+          <img src="${escapeAttr(short.thumbnail || '')}" alt="" loading="lazy">
+          <div class="shorts-saved-play-badge">${ICON_PLAY_SMALL}</div>
+          <button class="shorts-saved-unsave-btn" title="Unsave">${ICON_SAVE_FILLED}</button>
+        `
         cell.addEventListener('click', () => {
           closeSavedOverlay()
           openSearchResultInFeed(short.title || '', items, short.videoId)
           document.getElementById('shortsTopbarLabel').textContent = 'Saved'
+        })
+        cell.querySelector('.shorts-saved-unsave-btn').addEventListener('click', e => {
+          e.stopPropagation()
+          unsaveFromGrid(short, cell)
         })
         grid.appendChild(cell)
       })
@@ -928,10 +944,31 @@
       grid.innerHTML = '<div class="shorts-saved-empty">Failed to load saved shorts</div>'
     }
   }
+
+  async function unsaveFromGrid(short, cellEl) {
+    const me = getCurrentUser()
+    if (!me) return
+
+    savedVideoIds.delete(short.videoId)
+    if (cellEl) cellEl.remove()
+
+    const grid = document.getElementById('shortsSavedGrid')
+    if (grid && !grid.children.length) {
+      grid.innerHTML = '<div class="shorts-saved-empty">No saved shorts yet</div>'
+    }
+
+    // Keep the bookmark icon in the main feed in sync if this same
+    // video happens to be currently rendered there.
+    const feedIndex = allShorts.findIndex(s => s.videoId === short.videoId)
+    if (feedIndex !== -1) {
+      const iconEl = document.querySelector(`.shorts-slide[data-index="${feedIndex}"] .shorts-save-btn .shorts-action-icon`)
+      if (iconEl) { iconEl.classList.remove('saved'); iconEl.innerHTML = ICON_SAVE }
+    }
+
+    try { await fetch(`${BACKEND_URL}/shorts/saved/${me}/${short.videoId}`, { method: 'DELETE' }) } catch (e) {}
+  }
   function closeSavedOverlay() {
     document.getElementById('shortsSavedOverlay').classList.remove('active')
   }
 
 })()
-
-  
