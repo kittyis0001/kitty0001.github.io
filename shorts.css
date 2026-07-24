@@ -106,6 +106,30 @@
 .shorts-buffer-spinner.active { display: block; }
 @keyframes shortsSpin { to { transform: translate(-50%,-50%) rotate(360deg); } }
 
+/* ── Manual pause glyph — appears ONLY when the user deliberately
+   taps the active video to pause it. Never shown during swiping
+   or autoplay. ── */
+.shorts-pause-icon {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.85);
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.shorts-pause-icon svg { display: block; margin-left: 3px; }
+.shorts-pause-icon.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, -50%) scale(1);
+}
+
 /* ── Bottom gradient for text legibility ── */
 .shorts-bottom-gradient {
   position: absolute;
@@ -435,5 +459,5 @@
 @media (max-height: 560px) {
   .shorts-actions { gap: 12px; bottom: 14px; }
   .shorts-info { bottom: 12px; }
-  }
-        
+   }
+     
