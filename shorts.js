@@ -555,11 +555,22 @@
       const innerId = 'ytShort_' + index
       hostEl.innerHTML = `<div id="${innerId}"></div>`
 
+      // Only the slide that is truly active right now autoplays.
+      // Preloaded neighbors are cued (not started) — this is the
+      // fix for the pause icon getting stuck visible after a swipe:
+      // previously every preloaded neighbor autoplayed and was then
+      // immediately force-paused, and that autoplay-then-instant-
+      // pause sequence is what triggers YouTube's own native pause
+      // glyph to render and stick. A cued-but-never-started video
+      // never shows that glyph, and playVideo() on swipe-in is then
+      // a clean first play with nothing to flash.
+      const shouldAutoplay = index === currentIndex
+
       try {
         const player = new window.YT.Player(innerId, {
           videoId: short.videoId,
           playerVars: {
-            autoplay: 1,
+            autoplay: shouldAutoplay ? 1 : 0,
             mute: 1,
             controls: 0,
             disablekb: 1,
@@ -617,8 +628,6 @@
   function onPlayerReady(index, e) {
     if (index === currentIndex) {
       try { e.target.playVideo() } catch (err) {}
-    } else {
-      try { e.target.pauseVideo() } catch (err) {}
     }
     const slideEl = document.querySelector(`.shorts-slide[data-index="${index}"]`)
     const shimmer = slideEl && slideEl.querySelector('.shorts-shimmer')
