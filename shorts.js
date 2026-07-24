@@ -38,6 +38,24 @@
 //      window.listenUnseenMessageCount(cb)
 //      window.listenOtherUserOnlineStatus(cb)
 //    Everything else here is fully self-contained.
+//
+// 6. PERFORMANCE PASS (this build) — no UI/layout/icon changes:
+//    - GET responses (trending/search) are cached in-memory for a
+//      few minutes so revisiting the same feed/query doesn't
+//      re-hit the backend. Saved-list and mutating calls
+//      (save/repost/history) are never cached — they must stay live.
+//    - The prev/current/next YT.Player window (already in Phase 2)
+//      IS the preload mechanism: neighbor players are created and
+//      start buffering while paused, so swiping to them is instant.
+//      Thumbnails stay visible under the player until onReady fires,
+//      so there is never a black frame.
+//    - Playback now starts muted (browsers guarantee muted autoplay)
+//      and is unmuted the instant PLAYING fires for the active slide.
+//      This removes the stuck/native "blocked autoplay" play-button
+//      that unmuted-autoplay could previously trigger on swipe.
+//    - A small pause/play glyph now shows ONLY when the user
+//      deliberately taps to pause the active video (per explicit
+//      request) — it never appears during normal swiping.
 // ═══════════════════════════════════════════════════════════
 
 ;(function () {
@@ -70,6 +88,20 @@
   let intersectionObserver = null
   let savedVideoIds    = new Set()
   let domReady         = false
+
+  // ── API response cache — trending/search reads only. Never used
+  // for saved-list or mutating calls, which must stay live. ──
+  const API_CACHE_TTL_MS = 5 * 60 * 1000
+  const apiCache = new Map() // url -> { data, ts }
+
+  async function cachedFetchJson(url) {
+    const cached = apiCache.get(url)
+    if (cached && (Date.now() - cached.ts) < API_CACHE_TTL_MS) return cached.data
+    const res  = await fetch(url)
+    const data = await res.json()
+    apiCache.set(url, { data, ts: Date.now() })
+    return data
+  }
 
   // ── YouTube IFrame API readiness — polling-based on purpose.
   // story.js also loads this same API (for story music) and directly
@@ -328,8 +360,7 @@
     showEmptyState(false)
 
     try {
-      const res  = await fetch(`${BACKEND_URL}/shorts/trending?category=${encodeURIComponent(category)}`)
-      const data = await res.json()
+      const data  = await cachedFetchJson(`${BACKEND_URL}/shorts/trending?category=${encodeURIComponent(category)}`)
       const shorts = data.shorts || []
       if (!shorts.length && allShorts.length === 0) {
         showEmptyState(true, 'No shorts available right now.')
@@ -349,8 +380,7 @@
       const endpoint = currentSearchQuery
         ? `${BACKEND_URL}/shorts/search?q=${encodeURIComponent(currentSearchQuery)}`
         : `${BACKEND_URL}/shorts/trending?category=${encodeURIComponent(currentCategory)}`
-      const res  = await fetch(endpoint)
-      const data = await res.json()
+      const data = await cachedFetchJson(endpoint)
       appendShorts(data.shorts || [])
     } catch (e) {
       console.error('[Shorts] loadMoreShorts error:', e)
@@ -403,6 +433,7 @@
       <div class="shorts-shimmer"><img src="${escapeAttr(short.thumbnail || '')}" alt="" loading="lazy"></div>
       <div class="shorts-player-host"></div>
       <div class="shorts-buffer-spinner"></div>
+      <div class="shorts-pause-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="white"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
       <div class="shorts-bottom-gradient"></div>
       <div class="shorts-progress-track"><div class="shorts-progress-fill"></div></div>
       <div class="shorts-like-burst">❤️</div>
@@ -474,6 +505,10 @@
     if (oldPlayer && typeof oldPlayer.pauseVideo === 'function') {
       try { oldPlayer.pauseVideo() } catch (e) {}
     }
+    // Swiping never shows the manual pause glyph — clear it on both
+    // the slide being left and the slide becoming active.
+    hidePauseIcon(prevIndex)
+    hidePauseIcon(newIndex)
 
     ensurePlayersForWindow(newIndex)
     playActiveSlide(newIndex)
@@ -525,7 +560,7 @@
           videoId: short.videoId,
           playerVars: {
             autoplay: 1,
-            mute: 0,
+            mute: 1,
             controls: 0,
             disablekb: 1,
             fs: 0,
@@ -598,6 +633,15 @@
 
     if (spinner) spinner.classList.toggle('active', e.data === State.BUFFERING)
 
+    // Sound comes on automatically the moment the active video is
+    // actually playing (not just requested) — this sidesteps browsers
+    // blocking unmuted autoplay outright, which was the cause of a
+    // stuck native play button on swipe. Idempotent/harmless to call
+    // repeatedly.
+    if (e.data === State.PLAYING && index === currentIndex) {
+      try { e.target.unMute() } catch (err) {}
+    }
+
     // Loop the active video on end (Reels/TikTok "Replay" behavior).
     // Advancing to the next video only ever happens via an explicit
     // swipe — never automatically.
@@ -616,6 +660,12 @@
   function scrollToIndex(index) {
     const slideEl = document.querySelector(`.shorts-slide[data-index="${index}"]`)
     if (slideEl) slideEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function hidePauseIcon(index) {
+    const slideEl = document.querySelector(`.shorts-slide[data-index="${index}"]`)
+    const icon = slideEl && slideEl.querySelector('.shorts-pause-icon')
+    if (icon) icon.classList.remove('active')
   }
 
   // ══════════════════════════════════════════════════════
@@ -663,10 +713,17 @@
   function toggleSlidePlayPause(index) {
     const player = playerInstances.get(index)
     if (!player || !window.YT) return
+    const slideEl = document.querySelector(`.shorts-slide[data-index="${index}"]`)
+    const pauseIcon = slideEl && slideEl.querySelector('.shorts-pause-icon')
     try {
       const state = player.getPlayerState()
-      if (state === window.YT.PlayerState.PLAYING) player.pauseVideo()
-      else player.playVideo()
+      if (state === window.YT.PlayerState.PLAYING) {
+        player.pauseVideo()
+        if (pauseIcon) pauseIcon.classList.add('active')
+      } else {
+        player.playVideo()
+        if (pauseIcon) pauseIcon.classList.remove('active')
+      }
     } catch (e) {}
   }
 
@@ -775,8 +832,7 @@
     if (!query) { resultsEl.innerHTML = ''; return }
     resultsEl.innerHTML = '<div class="shorts-search-empty">Searching…</div>'
     try {
-      const res  = await fetch(`${BACKEND_URL}/shorts/search?q=${encodeURIComponent(query)}`)
-      const data = await res.json()
+      const data  = await cachedFetchJson(`${BACKEND_URL}/shorts/search?q=${encodeURIComponent(query)}`)
       const results = data.shorts || []
       if (!results.length) {
         resultsEl.innerHTML = '<div class="shorts-search-empty">No results found</div>'
@@ -868,3 +924,5 @@
   }
 
 })()
+
+  
