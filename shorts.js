@@ -289,6 +289,10 @@
     document.getElementById('shortsSearchOverlay').classList.remove('active')
     document.getElementById('shortsSavedOverlay').classList.remove('active')
     pauseAllPlayers()
+    // Chat is now what the user is actually looking at — clear the
+    // unread badge immediately instead of waiting for the next
+    // unrelated Firebase write to reach index.html's seen-listener.
+    if (typeof window.markMessagesSeenNow === 'function') window.markMessagesSeenNow()
   }
 
   function goHome() {
@@ -487,7 +491,6 @@
     const hue = Math.abs(hash) % 360
     return `hsl(${hue}, 55%, 42%)`
   }
-  
 
   // ══════════════════════════════════════════════════════
   // INTERSECTION OBSERVER — active-slide detection
