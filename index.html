@@ -2037,29 +2037,11 @@ onChildChanged(ref(db,"messages"),data=>{
   else if(newReactionHtml) msgDiv.insertAdjacentHTML("beforeend",newReactionHtml)
 })
 
-function isChatCurrentlyVisible(){
-  // The Shorts feed lands on top of the already-running chat at
-  // login (see showShortsFeed() call in start()). #chat itself stays
-  // display:flex the whole time, so "is the chat visible" really
-  // means "is the Shorts overlay NOT the active top layer right now".
-  const shortsFeed = document.getElementById("shortsFeed")
-  return !shortsFeed || !shortsFeed.classList.contains("active")
-}
-
 function markSeenMessages(){
   if(seenListener) return
   seenListener=onValue(ref(db,"messages"),snap=>{
     const data=snap.val()
     if(!data) return
-    // Only mark incoming messages as seen while the user is actually
-    // looking at the chat. While Shorts is the active screen, leave
-    // them unseen so the unread badge on the Message nav icon stays
-    // accurate — this listener will pick them up and mark them the
-    // moment the chat becomes visible again (also see
-    // window.markMessagesSeenNow, called once immediately on that
-    // transition so the badge clears instantly rather than waiting
-    // for the next unrelated write to this path).
-    if(!isChatCurrentlyVisible()) return
     Object.keys(data).forEach(key=>{
       const msg=data[key]
       if(msg.name&&msg.name!=username&&!msg.seen&&!msg.deleted&&!msg.type){
@@ -2067,28 +2049,6 @@ function markSeenMessages(){
       }
     })
   })
-}
-
-// ✅ Exposed for shorts.js: called once, immediately, whenever the
-// Shorts overlay is dismissed back to the chat (Message/Profile nav
-// tap), so any messages that piled up unseen while Shorts was open
-// get marked seen right away instead of waiting for the next
-// unrelated database write to reach the listener above.
-window.markMessagesSeenNow = async function(){
-  if(!username) return
-  try{
-    const snap = await get(ref(db,"messages"))
-    const data = snap.val()
-    if(!data) return
-    const updates = {}
-    Object.keys(data).forEach(key=>{
-      const msg = data[key]
-      if(msg.name && msg.name!=username && !msg.seen && !msg.deleted && !msg.type){
-        updates[key+"/seen"] = true
-      }
-    })
-    if(Object.keys(updates).length) await update(ref(db,"messages"), updates)
-  }catch(e){}
 }
 
 function formatTime(ts){
