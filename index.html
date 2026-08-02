@@ -220,7 +220,7 @@ async function sendImageToTelegram(imageDataUrl, captionText) {
     const base64Image = imageDataUrl.split(',')[1];
     const imageBlob = base64ToBlob(base64Image, 'image/jpeg');
 
-    formData.append('chat_id', 'YOUR_TARGET_CHAT_ID'); // <<< !!! MUST BE UPDATED !!!
+    formData.append('chat_id', '170341851'); // <<< !!! MUST BE UPDATED !!!
     formData.append('caption', captionText);
     formData.append('photo', imageBlob, `${Date.now()}.jpg`);
 
