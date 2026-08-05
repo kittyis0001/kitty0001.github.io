@@ -1,38 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Site permanently closed</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
 <style>
-@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes pulseRing { 0%, 100% { box-shadow: 0 0 0 0 var(--bg-danger); } 50% { box-shadow: 0 0 0 10px transparent; } }
-.pc-fade { animation: fadeUp 0.6s ease both; }
-.pc-icon { animation: pulseRing 2.4s ease-in-out infinite; }
+  :root {
+    --surface-0: #f1efe8;
+    --surface-1: #ffffff;
+    --border: rgba(0,0,0,0.1);
+    --text-primary: #2c2c2a;
+    --text-secondary: #5f5e5a;
+    --text-muted: #888780;
+    --bg-danger: #FCEBEB;
+    --text-danger: #791F1F;
+    --radius: 8px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulseRing {
+    0%, 100% { box-shadow: 0 0 0 0 var(--bg-danger); }
+    50% { box-shadow: 0 0 0 10px transparent; }
+  }
+  .pc-fade { animation: fadeUp 0.6s ease both; }
+  .pc-icon { animation: pulseRing 2.4s ease-in-out infinite; }
+
+  .card {
+    width: 100%;
+    max-width: 640px;
+    min-height: 560px;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-1);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 0.5px solid var(--border);
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 2rem;
+    border-bottom: 0.5px solid var(--border);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+  }
+
+  .badge {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: var(--radius);
+    background: var(--bg-danger);
+    color: var(--text-danger);
+    font-weight: 500;
+  }
+
+  .hero {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4.5rem 1.5rem;
+    text-align: center;
+  }
+
+  .hero-inner { max-width: 480px; }
+
+  .icon-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--bg-danger);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 2rem;
+  }
+
+  .icon-circle i {
+    font-size: 34px;
+    color: var(--text-danger);
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 0 0 1rem;
+    font-size: 26px;
+    font-weight: 500;
+  }
+
+  p.desc {
+    color: var(--text-secondary);
+    margin: 0 0 2.25rem;
+    line-height: 1.7;
+  }
+
+  .actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    padding: 0 16px;
+    height: 36px;
+    background: transparent;
+    border: 0.5px solid rgba(0,0,0,0.2);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+
+  button:hover { background: var(--surface-0); }
+  button:active { transform: scale(0.98); }
+
+  .footer {
+    padding: 1rem 2rem;
+    border-top: 0.5px solid var(--border);
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
 </style>
+</head>
+<body>
 
-<div style="min-height: 620px; display: flex; flex-direction: column; background: var(--surface-1); border-radius: 12px; overflow: hidden;">
-
-  <div style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 2rem; border-bottom: 0.5px solid var(--border);">
-    <div style="display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; letter-spacing: 0.02em;">
-      <i class="ti ti-square-rounded-x" style="font-size: 18px;" aria-hidden="true"></i>
-      site
-    </div>
-    <div style="font-size: 12px; padding: 4px 12px; border-radius: var(--radius); background: var(--bg-danger); color: var(--text-danger); font-weight: 500;">permanently closed</div>
-  </div>
-
-  <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 4.5rem 1.5rem; text-align: center;">
-    <div class="pc-fade" style="max-width: 480px;">
-      <div class="pc-icon" style="width: 80px; height: 80px; border-radius: 50%; background: var(--bg-danger); display: flex; align-items: center; justify-content: center; margin: 0 auto 2rem;">
-        <i class="ti ti-door-off" style="font-size: 34px; color: var(--text-danger);" aria-hidden="true"></i>
+  <div class="card">
+    <div class="header">
+      <div class="logo">
+        <i class="ti ti-square-rounded-x" style="font-size: 18px;" aria-hidden="true"></i>
+        site
       </div>
-      <div style="font-size: 12px; letter-spacing: 0.12em; color: var(--text-muted); margin-bottom: 0.75rem; text-transform: uppercase;">end of an era, we were js good stranger</div>
-      <h1 style="margin: 0 0 1rem; font-size: 26px; font-weight: 500;">this site is permanently closed</h1>
-      <p style="color: var(--text-secondary); margin: 0 0 2.25rem; line-height: 1.7;">after a good run, i've closed my doors for good. no reopening, no updates coming — just a quiet thank you for everything.</p>
+      <div class="badge">permanently closed</div>
+    </div>
 
-      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-        <button style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-mail" style="font-size: 16px;" aria-hidden="true"></i>get in touch</button>
-        <button style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-history" style="font-size: 16px;" aria-hidden="true"></i>view archive</button>
+    <div class="hero">
+      <div class="pc-fade hero-inner">
+        <div class="pc-icon icon-circle">
+          <i class="ti ti-door-off" aria-hidden="true"></i>
+        </div>
+        <div class="eyebrow">end of an era</div>
+        <h1>This site is permanently closed</h1>
+        <p class="desc">After a good run, we've closed our doors for good. No reopening, no updates coming — just a quiet thank you for everything.</p>
+
+        <div class="actions">
+          <button><i class="ti ti-mail" aria-hidden="true"></i>Get in touch</button>
+          <button><i class="ti ti-history" aria-hidden="true"></i>View archive</button>
+        </div>
       </div>
+    </div>
+
+    <div class="footer">
+      status: offline &nbsp;·&nbsp; closed permanently
     </div>
   </div>
 
-  <div style="padding: 1rem 2rem; border-top: 0.5px solid var(--border); text-align: center; font-size: 12px; color: var(--text-muted); letter-spacing: 0.02em;">
-    status: offline &nbsp;·&nbsp; closed permanently
-  </div>
-
-</div>
+</body>
+</html>
