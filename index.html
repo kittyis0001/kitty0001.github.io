@@ -1,1 +1,197 @@
 
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Permanently Closed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0b0a09;
+    --panel: #131210;
+    --line: #3a352b;
+    --text: #ece7dd;
+    --muted: #8a8377;
+    --gold: #b08d57;
+    --gold-soft: rgba(176,141,87,0.35);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    background: radial-gradient(120% 120% at 50% 0%, #171512 0%, #0b0a09 55%, #060605 100%);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    overflow-x:hidden;
+    padding: 24px;
+  }
+
+  .frame{
+    position:relative;
+    width:100%;
+    max-width: 560px;
+    padding: 64px 48px;
+    text-align:center;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0) 40%);
+    opacity: 0;
+    transform: translateY(14px);
+    animation: riseIn 1.4s cubic-bezier(.19,1,.22,1) forwards;
+  }
+
+  .frame::before,
+  .frame::after{
+    content:"";
+    position:absolute;
+    width:18px;
+    height:18px;
+    border: 1px solid var(--gold);
+    opacity: 0.65;
+  }
+  .frame::before{ top:-1px; left:-1px; border-right:none; border-bottom:none; }
+  .frame::after{ bottom:-1px; right:-1px; border-left:none; border-top:none; }
+
+  @keyframes riseIn{
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  .seal{
+    width: 46px;
+    height: 46px;
+    margin: 0 auto 28px;
+    border-radius: 50%;
+    border: 1px solid var(--gold);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+  }
+  .seal::before{
+    content:"";
+    position:absolute;
+    inset: 6px;
+    border-radius:50%;
+    border: 1px solid var(--gold-soft);
+  }
+  .seal-dot{
+    width:5px;
+    height:5px;
+    border-radius:50%;
+    background: var(--gold);
+    animation: pulseGlow 3.2s ease-in-out infinite;
+  }
+  @keyframes pulseGlow{
+    0%,100%{ box-shadow: 0 0 0px var(--gold-soft); opacity:.7; }
+    50%{ box-shadow: 0 0 10px var(--gold-soft); opacity:1; }
+  }
+
+  .eyebrow{
+    font-family:'Inter', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+
+  h1{
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 400;
+    font-size: clamp(30px, 5vw, 42px);
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    color: var(--text);
+    margin-bottom: 28px;
+  }
+
+  .divider{
+    width: 64px;
+    height: 1px;
+    background: var(--gold);
+    opacity: 0.5;
+    margin: 0 auto 28px;
+  }
+
+  .message{
+    font-family:'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 19px;
+    line-height: 1.75;
+    color: var(--muted);
+    max-width: 420px;
+    margin: 0 auto 40px;
+  }
+
+  .cta{
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    padding: 15px 38px;
+    border: 1px solid var(--gold);
+    color: var(--text);
+    text-decoration:none;
+    font-family:'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    background: transparent;
+    position: relative;
+    transition: color .5s ease;
+    overflow:hidden;
+  }
+  .cta span{ position: relative; z-index: 2; }
+  .cta::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background: var(--gold);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform .5s cubic-bezier(.65,0,.35,1);
+    z-index:1;
+  }
+  .cta:hover{ color:#0b0a09; }
+  .cta:hover::before{ transform: scaleX(1); }
+
+  .footnote{
+    margin-top: 34px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #514c40;
+    font-family:'Inter', sans-serif;
+  }
+
+  @media (max-width: 480px){
+    .frame{ padding: 48px 26px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .frame{ animation:none; opacity:1; transform:none; }
+    .seal-dot{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="frame">
+    <div class="seal"><div class="seal-dot"></div></div>
+    <div class="eyebrow">Notice</div>
+    <h1>This site is<br>permanently closed</h1>
+    <div class="divider"></div>
+    <p class="message">
+      I'm mentally exhausted. I don't want us to keep hurting each other anymore.<br><br>
+      Thank you for everything, but I think it's best if we end our relationship here. Your my favourite stranger.
+    </p>
+    <a class="cta" href="https://www.instagram.com/reel/DbqpKZAJWPY/?igsh=MXYxZnFqNHhjcWIzbA==" target="_blank" rel="noopener">
+      <span>Click Here</span>
+    </a>
+    <div class="footnote">— end of chapter —</div>
+  </div>
+
+</body>
+</html>
