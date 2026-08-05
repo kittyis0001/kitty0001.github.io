@@ -1,1 +1,38 @@
+<style>
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulseRing { 0%, 100% { box-shadow: 0 0 0 0 var(--bg-danger); } 50% { box-shadow: 0 0 0 10px transparent; } }
+.pc-fade { animation: fadeUp 0.6s ease both; }
+.pc-icon { animation: pulseRing 2.4s ease-in-out infinite; }
+</style>
 
+<div style="min-height: 620px; display: flex; flex-direction: column; background: var(--surface-1); border-radius: 12px; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 2rem; border-bottom: 0.5px solid var(--border);">
+    <div style="display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; letter-spacing: 0.02em;">
+      <i class="ti ti-square-rounded-x" style="font-size: 18px;" aria-hidden="true"></i>
+      site
+    </div>
+    <div style="font-size: 12px; padding: 4px 12px; border-radius: var(--radius); background: var(--bg-danger); color: var(--text-danger); font-weight: 500;">permanently closed</div>
+  </div>
+
+  <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 4.5rem 1.5rem; text-align: center;">
+    <div class="pc-fade" style="max-width: 480px;">
+      <div class="pc-icon" style="width: 80px; height: 80px; border-radius: 50%; background: var(--bg-danger); display: flex; align-items: center; justify-content: center; margin: 0 auto 2rem;">
+        <i class="ti ti-door-off" style="font-size: 34px; color: var(--text-danger);" aria-hidden="true"></i>
+      </div>
+      <div style="font-size: 12px; letter-spacing: 0.12em; color: var(--text-muted); margin-bottom: 0.75rem; text-transform: uppercase;">end of an era, we were js good stranger</div>
+      <h1 style="margin: 0 0 1rem; font-size: 26px; font-weight: 500;">this site is permanently closed</h1>
+      <p style="color: var(--text-secondary); margin: 0 0 2.25rem; line-height: 1.7;">after a good run, i've closed my doors for good. no reopening, no updates coming — just a quiet thank you for everything.</p>
+
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <button style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-mail" style="font-size: 16px;" aria-hidden="true"></i>get in touch</button>
+        <button style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-history" style="font-size: 16px;" aria-hidden="true"></i>view archive</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 1rem 2rem; border-top: 0.5px solid var(--border); text-align: center; font-size: 12px; color: var(--text-muted); letter-spacing: 0.02em;">
+    status: offline &nbsp;·&nbsp; closed permanently
+  </div>
+
+</div>
