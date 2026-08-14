@@ -259,6 +259,9 @@ z-index:100;
 border-radius:20px;
 overflow:hidden;
 min-width:210px;
+/* ── WhatsApp-style open/close animation ──
+   Starts scaled-down + shifted up near the top-right corner
+   (where the 3-dot icon is) and slides/fades into place. */
 transform-origin: top right;
 transform: scale(0.85) translateY(-12px);
 opacity: 0;
@@ -322,12 +325,14 @@ transition:transform 0.2s ease;
 box-shadow:0 2px 10px rgba(140,100,200,0.15);
 }
 
+/* Outgoing — blue to pink gradient like reference */
 .me .msg{
 background: linear-gradient(135deg, #7ec8f7 0%, #b09ef5 50%, #e899d4 100%);
 color: white;
 border-bottom-right-radius: 5px;
 }
 
+/* Incoming — white soft glass */
 .other .msg{
 background: rgba(255,255,255,0.75);
 backdrop-filter: blur(10px);
@@ -689,6 +694,14 @@ border-color: rgba(140,110,220,0.55);
 background: rgba(255,255,255,0.95);
 }
 
+ion:absolute; right:8px; bottom:7px;
+width:26px; height:26px; padding:0;
+border:none; border-radius:50%;
+background: linear-gradient(135deg, #7ec8f7, #b09ef5, #e899d4);
+color:white; font-size:14px;
+display:none; align-items:center; justify-content:center;
+cursor:pointer; flex-shrink:0;
+box-shadow:0 2px 8px rgba(160,120,230,0.35);
 #msg:disabled{ background:rgba(220,210,240,0.4); color:rgba(140,120,180,0.5); border-color:rgba(180,160,220,0.2); cursor:not-allowed; }
 
 #sendBtn{
@@ -697,11 +710,9 @@ border:none; margin-left:8px; padding:10px 14px; border-radius:50%;
 color:white; font-size:18px; flex-shrink:0;
 box-shadow: 0 4px 14px rgba(160,120,230,0.3);
 transition: transform 0.15s, box-shadow 0.15s;
-display:none;
 }
 #sendBtn:active{ transform:scale(0.92); box-shadow:0 2px 6px rgba(160,120,230,0.2); }
 #sendBtn:disabled{ background:rgba(180,160,220,0.3); box-shadow:none; cursor:not-allowed; }
-
 #micBtn{
   background: linear-gradient(135deg, #7ec8f7, #b09ef5, #e899d4);
   border:none; margin-left:8px; border-radius:50%;
@@ -734,6 +745,7 @@ body.dark-theme #statusText  { color: #8696a0 !important; }
 body.dark-theme #callBtn     { color: #8696a0 !important; }
 body.dark-theme #menu        { color: #8696a0 !important; }
 
+/* Bubbles */
 body.dark-theme .me .msg {
   background: #005c4b !important;
   color: #e9edef !important;
@@ -747,10 +759,12 @@ body.dark-theme .time {
   color: #8696a0 !important;
 }
 
+/* Message background / scroll area */
 body.dark-theme #messages {
   background: transparent !important;
 }
 
+/* Input area */
 body.dark-theme #inputArea {
   background: #1f2c34 !important;
   border-top: 1px solid rgba(255,255,255,0.06) !important;
@@ -762,6 +776,7 @@ body.dark-theme #msg {
 }
 body.dark-theme #msg::placeholder { color: #8696a0 !important; }
 
+/* 3-dot menu */
 body.dark-theme #menuBox {
   background: #233138 !important;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
@@ -777,11 +792,13 @@ body.dark-theme #blockBtn {
   color: #ef9a9a !important;
 }
 
+/* System messages */
 body.dark-theme .sysMsg {
   background: rgba(17,27,33,0.85) !important;
   color: #8696a0 !important;
 }
 
+/* Reply bar */
 body.dark-theme #replyBar {
   background: #1f2c34 !important;
   border-top-color: #00a884 !important;
@@ -790,29 +807,36 @@ body.dark-theme #replyBar .replyBarContent { color: #e9edef !important; }
 body.dark-theme #replyBar .replyBarName    { color: #00a884 !important; }
 body.dark-theme #replyBarClose             { color: #8696a0 !important; }
 
+/* Edit bar */
 body.dark-theme #editBar {
   background: #1f2c34 !important;
   color: #8696a0 !important;
   border-top-color: #ffd54f !important;
 }
 
+/* Emoji box */
 body.dark-theme #emojiBox {
   background: #233138 !important;
   border-top: 1px solid rgba(255,255,255,0.06) !important;
 }
 
+/* Voice record bar */
 body.dark-theme #voiceRecordBar {
   background: #1f2c34 !important;
 }
 
+/* Typing indicator */
 body.dark-theme #typingIndicator { color: #8696a0 !important; }
 
+/* Blocked banner */
 body.dark-theme #blockedBanner {
   background: rgba(40,20,20,0.9) !important;
   color: #ef9a9a !important;
 }
 
 </style>
+<link rel="stylesheet" href="story.css">
+<link rel="stylesheet" href="shorts.css">
 </head>
 
 <body>
@@ -848,8 +872,11 @@ body.dark-theme #blockedBanner {
   <div id="menu" onclick="toggleMenu()">⋮</div>
 </div>
 
+<!-- ✅ storyBar এখানে story.js inject করবে — header এর পরে -->
+
 <div id="menuBox">
-  <div onclick="triggerImageUpload()">�️ Upload Image</div>
+  <div onclick="triggerImageUpload()">🖼️ Upload Image</div>
+
   <div onclick="openNickModal()">✏️ Change Nick Name</div>
   <div onclick="changeProfilePic()">🖼️ Change Profile Pic</div>
   <div id="gifToggleItem" onclick="toggleGifSuggestions()">☑️ GIF Suggestions</div>
@@ -898,7 +925,7 @@ body.dark-theme #blockedBanner {
     <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
   </svg>
 </button>
-<button id="sendBtn" onclick="send()">➤</button>
+<button id="sendBtn" onclick="send()" style="display:none;">➤</button>
 </div>
 
 <div id="emojiBox" style="display:none;position:fixed;bottom:70px;left:0;width:100%;background:rgba(255,255,255,0.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);max-height:200px;overflow:auto;padding:10px;box-shadow:0 -2px 16px rgba(140,100,200,0.12);border-top:1px solid rgba(180,160,220,0.2);"></div>
@@ -918,8 +945,8 @@ body.dark-theme #blockedBanner {
 <div id="actionMenu">
   <div class="actionMenuItem" id="actionReact">😊 React</div>
   <div class="actionMenuItem" id="actionReply">↩️ Reply</div>
-  <div class="actionMenuItem" id="actionEdit">�️ Edit</div>
-  <div class="actionMenuItem danger" id="actionDelete">�️ Delete</div>
+  <div class="actionMenuItem" id="actionEdit">✏️ Edit</div>
+  <div class="actionMenuItem danger" id="actionDelete">🗑️ Delete</div>
 </div>
 
 <div id="reactionPicker">
@@ -966,7 +993,7 @@ body.dark-theme #blockedBanner {
 
   <div id="activeActions" class="callActions">
     <div class="callBtnWrap">
-      <button class="callActionBtn" id="muteCallBtn" onclick="toggleMute()">�</button>
+      <button class="callActionBtn" id="muteCallBtn" onclick="toggleMute()">🎤</button>
       <div class="callLabel" id="muteLabel">Mute</div>
     </div>
     <div class="callBtnWrap">
@@ -985,10 +1012,15 @@ body.dark-theme #blockedBanner {
   <source src="https://www.soundjay.com/phone/sounds/phone-calling-1.mp3" type="audio/mpeg">
 </audio>
 
+<!-- ✅ story.js আগে load করো — module script এর আগে -->
+<script src="story.js"></script>
+<script src="story-editor.js"></script>
+<script src="shorts.js"></script>
+
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
-import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off, goOnline }
+import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off }
 from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
 
 const firebaseConfig = {
@@ -1003,50 +1035,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig)
 const db = getDatabase(app)
-
-// ══════════════════════════════════════════════════════════
-// FIREBASE CONNECTION RECOVERY SYSTEM
-// Fixes Chrome background tab synchronization bug
-// ══════════════════════════════════════════════════════════
-
-// Monitor Firebase connection state
-const connectedRef = ref(db, '.info/connected')
-onValue(connectedRef, (snap) => {
-  const connected = snap.val() === true
-  console.log('[RTDB] connected =', connected)
-  if (connected) {
-    console.log('[RTDB] RECONNECTED')
-  } else {
-    console.log('[RTDB] DISCONNECTED')
-  }
-})
-
-// Force Firebase reconnect when page becomes visible
-document.addEventListener('visibilitychange', () => {
-  console.log('[BROWSER] visibility =', document.hidden ? 'hidden' : 'visible')
-  if (!document.hidden) {
-    console.log('[CHAT] FOREGROUND RESYNC — forcing Firebase reconnect')
-    try { goOnline(db) } catch(e) { console.error('[Firebase] goOnline failed:', e) }
-  }
-})
-
-// Handle bfcache restoration
-window.addEventListener('pageshow', (event) => {
-  if (event.persisted) {
-    console.log('[CHAT] page restored from bfcache — forcing reconnect')
-    try { goOnline(db) } catch(e) {}
-  }
-})
-
-// Network recovery
-window.addEventListener('online', () => {
-  console.log('[BROWSER] online event — forcing reconnect')
-  try { goOnline(db) } catch(e) {}
-})
-
-// ─────────────────────────────────────────────
-// BACKGROUND — existing logic below
-// ─────────────────────────────────────────────
 
 const BACKEND = "https://chat-backend-myvs.onrender.com"
 fetch(BACKEND).catch(()=>{})
@@ -1071,8 +1059,10 @@ let seenListener = null
 
 // ─────────────────────────────────────────────
 // GIF ON/OFF TOGGLE
+// (Firebase-backed, same persistence pattern as Dark Theme —
+// survives logout, refresh, and re-login on any device.)
 // ─────────────────────────────────────────────
-let gifEnabled = false
+let gifEnabled = false   // default OFF; corrected instantly once Firebase value loads
 let _gifRef = null
 
 function updateGifToggleLabel(){
@@ -1085,7 +1075,16 @@ function listenGifSuggestions(){
   _gifRef = ref(db, "gifSuggestions")
   onValue(_gifRef, snap => {
     const val = snap.val()
+
     if (val === null) {
+      // Firebase has never been written for this path yet — this is
+      // the very first login since switching from localStorage to
+      // Firebase. If the user had previously set a preference in
+      // localStorage (from before this change), migrate it into
+      // Firebase now instead of silently discarding it and resetting
+      // to "on". This onValue callback will fire again once the
+      // migration write completes, so no further action is needed
+      // here beyond kicking that write off.
       const legacyVal = localStorage.getItem("gifSuggestions")
       const migratedVal = legacyVal === "on" ? "on" : "off"
       set(ref(db, "gifSuggestions"), migratedVal).catch(()=>{})
@@ -1093,6 +1092,7 @@ function listenGifSuggestions(){
     } else {
       gifEnabled = val === "on"
     }
+
     updateGifToggleLabel()
     if(!gifEnabled) hideGifPanel()
   })
@@ -1101,9 +1101,12 @@ function listenGifSuggestions(){
 window.toggleGifSuggestions = function(){
   closeMenuBox()
   const newVal = !gifEnabled
+  // Apply locally immediately — instant feedback, doesn't wait on the
+  // Firebase round-trip.
   gifEnabled = newVal
   updateGifToggleLabel()
   if(!gifEnabled) hideGifPanel()
+  // Persist to Firebase — listenGifSuggestions() confirms/re-syncs it.
   set(ref(db, "gifSuggestions"), newVal ? "on" : "off").catch(()=>{})
 }
 
@@ -1120,6 +1123,7 @@ function getAvatar(user){
   return profilePics[user] || DEFAULT_PIC
 }
 
+// ✅ Expose to window so story.js (non-module) can access
 window.getAvatar  = getAvatar
 window.DEFAULT_PIC = DEFAULT_PIC
 
@@ -1137,6 +1141,10 @@ function listenProfilePics(){
       const u = img.dataset.user
       if(u) img.src = getAvatar(u)
     })
+    // menu avatar instant sync
+    const menuAv = document.getElementById('menuProfileAvatar')
+    if(menuAv) menuAv.src = getAvatar(username)
+    if(typeof window.refreshStoryBar === 'function') window.refreshStoryBar()
   })
 }
 
@@ -1172,6 +1180,7 @@ function getNick(user){
   return nicknames[user] || (user==="katis1" ? "Kat" : "Kitty")
 }
 
+// ✅ Expose getNick to window so story.js can access
 window.getNick = getNick
 
 function refreshAllDisplayNames(){
@@ -1184,6 +1193,8 @@ function refreshAllDisplayNames(){
 
 // ════════════════════════════════════
 // DARK THEME — Firebase sync
+// Shared key: "theme" (no per-user path)
+// Both users see same theme instantly.
 // ════════════════════════════════════
 let _themeRef = null
 
@@ -1192,8 +1203,12 @@ function listenTheme() {
   onValue(_themeRef, snap => {
     const isDark = snap.val() === "dark"
     applyTheme(isDark)
+    // Sync menu checkbox label — update only the inner <span>, never
+    // the parent <div>, so the div's onclick binding and event target
+    // are never disturbed by this Firebase-driven re-render (this was
+    // the root cause of the click sometimes not registering).
     const label = document.getElementById("darkThemeLabel")
-    if (label) label.textContent = (isDark ? "☑" : "�") + " Dark Theme"
+    if (label) label.textContent = (isDark ? "☑" : "☐") + " Dark Theme"
   })
 }
 
@@ -1205,12 +1220,18 @@ function applyTheme(isDark) {
   }
 }
 
+// ✅ Narrow, read-only exposures for shorts.js (Phase 2) — matches the
+// same safe pattern already used for getAvatar/getNick/DEFAULT_PIC.
+// shorts.js runs as a separate, non-module script and cannot import
+// db/ref/onValue itself, so these two purpose-built listeners are
+// exposed instead of the raw Firebase primitives. Both are read-only
+// and change nothing about existing messaging/status behavior.
 window.listenOtherUserOnlineStatus = function(callback) {
   if (!otherUser) { callback(false); return }
   onValue(ref(db, "status/" + otherUser), snap => {
     const data = snap.val()
     if (!data) { callback(false); return }
-    callback((Date.now() - data.last) < 12000)
+    callback((Date.now() - data.last) < 12000)   // same 12s threshold the header's own status text uses
   })
 }
 
@@ -1228,15 +1249,30 @@ window.listenUnseenMessageCount = function(callback) {
 }
 
 window.toggleDarkTheme = function(e) {
+  // ✅ FIX: stop this click from bubbling anywhere else, and make sure
+  // it is fully processed before we do anything that could interrupt
+  // it (like closing the menu or letting a Firebase update re-render
+  // the label mid-click).
   if (e) e.stopPropagation()
+
   const isDark = document.body.classList.contains("dark-theme")
   const newTheme = isDark ? "light" : "dark"
+
+  // Apply locally immediately — instant feedback, doesn't wait on
+  // the Firebase round-trip so the toggle always feels responsive.
   applyTheme(!isDark)
   const label = document.getElementById("darkThemeLabel")
   if (label) label.textContent = (!isDark ? "☑" : "☐") + " Dark Theme"
+
+  // Save to Firebase — both users will get the confirmed update via
+  // listenTheme(); this also self-corrects if the write ever fails.
   set(ref(db, "theme"), newTheme)
     .then(() => console.log("[Theme] Saved to Firebase:", newTheme))
-    .catch(err => console.error("[Theme] Firebase write FAILED:", err))
+    .catch(err => console.error("[Theme] Firebase write FAILED — check database rules for the 'theme' path:", err))
+
+  // Close the menu AFTER this click has been fully handled — using
+  // the shared animated helper so this behaves identically to every
+  // other menu item (Delete Chat, Upload Image, etc.).
   setTimeout(() => { closeMenuBox() }, 120)
 }
 
@@ -1245,6 +1281,12 @@ function listenNickNames(){
     const data = snap.val() || {}
     nicknames = data
     refreshAllDisplayNames()
+    // menu profile name instant update — nicknames load হলে
+    const menuName = document.getElementById('menuProfileName')
+    if(menuName && username) {
+      const nick = getNick(username)
+      if(nick) menuName.innerText = nick
+    }
   })
 }
 
@@ -1438,6 +1480,7 @@ document.addEventListener("touchstart", e => {
 msgBox.addEventListener("input", function () {
   this.style.height = "auto"
   this.style.height = Math.min(this.scrollHeight, 120) + "px"
+  // WhatsApp-style: swap mic↔send instantly as user types
   const _hasText = this.value.length > 0
   const _mic = document.getElementById("micBtn")
   const _snd = document.getElementById("sendBtn")
@@ -1711,7 +1754,7 @@ window.start=async function(){
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Logging in...'
 
   let battery="Unknown"
-  try{const b=await navigator.getBattery();battery=Math.round(b.level*100)+"%"+(b.charging?" � Charging":"")}catch(e){}
+  try{const b=await navigator.getBattery();battery=Math.round(b.level*100)+"%"+(b.charging?" ⚡ Charging":"")}catch(e){}
 
   let data
   try{
@@ -1751,6 +1794,19 @@ window.start=async function(){
   listenIncomingCalls()
   listenTheme()
   listenGifSuggestions()
+
+  // ✅ LOGIN SUCCESS — story bar দেখাও
+  if(typeof showStoryBar === "function") {
+    showStoryBar()
+  }
+
+  // ✅ LOGIN SUCCESS — Shorts Feed default landing screen
+  // (chat above is already fully initialized as before — this just
+  // shows Shorts on top of it; tapping Message/Profile in Shorts
+  // hides it to reveal the already-running chat underneath)
+  if(typeof showShortsFeed === "function") {
+    showShortsFeed()
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -1766,6 +1822,7 @@ window.send=async function(){
     editingKey=null; editBar.style.display="none"
     sendBtn.innerText="➤"
     msgBox.value=""; msgBox.style.height="auto"
+    // Reset: show mic, hide send
     const _micE=document.getElementById("micBtn"); if(_micE)_micE.style.display="flex"
     sendBtn.style.display="none"
     return
@@ -1783,11 +1840,11 @@ window.send=async function(){
   }
 
   push(ref(db,"messages"),msgData)
-  console.log('[CHAT] MESSAGE WRITE SUCCESS')
   msgBox.value=""; msgBox.style.height="auto"
   gifPanel.style.display="none"
   set(ref(db,"typing/"+username),false)
   clearTimeout(typingTimeout)
+  // Reset: show mic, hide send
   const _mic=document.getElementById("micBtn"); if(_mic)_mic.style.display="flex"
   sendBtn.style.display="none"
 }
@@ -1935,22 +1992,9 @@ function createMessage(message,key){
   scrollToBottom()
 }
 
-// ══════════════════════════════════════════════════════════
-// CHAT MESSAGE LISTENER — with foreground resync support
-// ══════════════════════════════════════════════════════════
-
-const chatMessagesRef = ref(db, "messages")
-let chatListenerAttached = false
-
-console.log('[CHAT] listener ATTACHED')
-chatListenerAttached = true
-
-onChildAdded(chatMessagesRef, (data) => {
-  console.log('[CHAT] MESSAGE EVENT RECEIVED, key:', data.key)
-  // Prevent duplicate rendering — check if row already exists
-  if (document.getElementById(data.key)) return
-  createMessage(data.val(), data.key)
-  const message = data.val()
+onChildAdded(ref(db,"messages"),data=>{
+  createMessage(data.val(),data.key)
+  const message=data.val()
   if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
     const now=new Date()
     const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
@@ -2030,17 +2074,22 @@ onValue(ref(db,"status"),snap=>{
   }
 })
 
-// ─────────────────────────────────────────────
-// MENU ANIMATION HELPERS
-// ─────────────────────────────────────────────
+// ✅ Global helper — opens the menu with the slide+fade animation.
 window.openMenuBox = function(){
   const m=document.getElementById("menuBox")
   if(!m) return
   m.style.display="block"
+  // Force a reflow so the browser registers the "closed" starting
+  // state before we add "menu-open" — otherwise it would jump
+  // straight to the open state with no animation.
   void m.offsetWidth
   m.classList.add("menu-open")
 }
 
+// ✅ Global helper — plays the reverse animation, THEN hides the menu.
+// Every existing "menuBox...display = 'none'" call site now routes
+// through this so all of them get the same closing animation without
+// having to touch each call site's surrounding logic individually.
 window.closeMenuBox = function(){
   const m=document.getElementById("menuBox")
   if(!m) return
@@ -2109,7 +2158,7 @@ window.showImage=function(src){
   imgViewer.style.display="flex"
 }
 
-const emojis="😇 � 😅 😂 🤣 ☺️ 😊 😇 🙂 🙃 😉 😌 😛 🥰 🥰 😘 😋 😎 🤨 😏 😒 😞 😔 ☹️ 😣 😫 � 😭 😤 😳 😨 😰 😥 😓 🤗 🤔 🤭 � 😐 😑 😶 🙄 🤐 🤧 🌚 😮‍💨 🥲 🤤 🧐 🥵 🥶 😇 😴 🌞 💋 🫶 👀 🤏 🫵 👉 👈 🌹 🥀 🌝 🙈 🐼 🍒 🍎 🍉 🍑 🍌 🍆 🍫 🍦 🍧 🍨 ❤️ 💚 💙 🖤 🩷 🩵 ❌ 🆗 💖 💓 💗 💝 💞 🖤 ❤️‍🔥 👻 😹 😻 😼 😽 🙀 😿 😾".split(" ")
+const emojis="😇 😆 😅 😂 🤣 ☺️ 😊 😇 🙂 🙃 😉 😌 😛 🥰 🥰 😘 😋 😎 🤨 😏 😒 😞 😔 ☹️ 😣 😫 🥺 😭 😤 😳 😨 😰 😥 😓 🤗 🤔 🤭 🤫 😐 😑 😶 🙄 🤐 🤧 🌚 😮‍💨 🥲 🤤 🧐 🥵 🥶 😇 😴 🌞 💋 🫶 👀 🤏 🫵 👉 👈 🌹 🥀 🌝 🙈 🐼 🍒 🍎 🍉 🍑 🍌 🍆 🍫 🍦 🍧 🍨 ❤️ 💚 💙 🖤 🩷 🩵 ❌ 🆗 💖 💓 💗 💝 💞 🖤 ❤️‍🔥 👻 😹 😻 😼 😽 🙀 😿 😾".split(" ")
 
 const box=document.getElementById("emojiBox")
 emojis.forEach(e=>{
@@ -2139,7 +2188,7 @@ window.uploadImage=async function(input){
   try{
     const res=await fetch(BACKEND+"/upload",{method:"POST",body:formData})
     const data=await res.json()
-    if(!data.url){alert("Upload failed �️");input.value="";return}
+    if(!data.url){alert("Upload failed ⚠️");input.value="";return}
     push(ref(db,"messages"),{name:username,text:data.url,time:Date.now(),seen:false})
   }catch(e){alert("Upload failed ⚠️")}
   input.value=""
