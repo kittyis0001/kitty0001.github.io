@@ -1011,7 +1011,7 @@ body.dark-theme #blockedBanner {
 
 <script type="module">
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
 import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off, goOffline, goOnline }
 from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
 
@@ -1025,8 +1025,14 @@ const firebaseConfig = {
   appId: "1:1082000480834:web:1f6871c095821e865a2bdb"
 }
 
-const app = initializeApp(firebaseConfig)
-const db = getDatabase(app)
+// `app`/`db` are `let`, not `const` — after a long background gap we
+// fully delete and recreate the Firebase app instance (see
+// hardResetConnection below), which is the only way we've found to
+// reliably recover a connection Chrome has wedged after 5+ minutes
+// hidden. Every function below reads the current `db` via closure,
+// so reassigning it here is picked up everywhere automatically.
+let app = initializeApp(firebaseConfig)
+let db = getDatabase(app)
 
 // ══════════════════════════════════════════════════════════
 // FIREBASE CONNECTION RECOVERY — fixes Chrome background sync bug
@@ -1036,11 +1042,13 @@ const db = getDatabase(app)
 // signal for whether the socket is actually alive. Everything below
 // keys off this instead of assuming a single goOnline() call worked.
 let rtdbConnected = false
-const connectedRef = ref(db, '.info/connected')
-onValue(connectedRef, (snap) => {
-  rtdbConnected = snap.val() === true
-  console.log('[RTDB] connected =', rtdbConnected)
-})
+function attachConnectionMonitor(){
+  onValue(ref(db, '.info/connected'), (snap) => {
+    rtdbConnected = snap.val() === true
+    console.log('[RTDB] connected =', rtdbConnected)
+  })
+}
+attachConnectionMonitor()
 
 const BACKEND = "https://chat-backend-myvs.onrender.com"
 fetch(BACKEND).catch(()=>{})
@@ -1078,9 +1086,16 @@ let seenListener = null
 // connection state for verification/debugging.
 // ─────────────────────────────────────────────
 let wasHidden = false
+let hiddenAt = 0
 let lastResyncTime = 0
 let catchUpInProgress = false
 let visiblePollInterval = null
+let hardResetInProgress = false
+// Threshold matches the user-observed pattern: short gaps (~30s-1min)
+// recover fine with a lightweight goOffline/goOnline retry; gaps past
+// this get Chrome's aggressive background-tab socket teardown, which
+// only a full app/db recreation reliably recovers from.
+const HARD_RESET_THRESHOLD_MS = 90 * 1000
 
 // ─────────────────────────────────────────────
 // CATCH-UP FETCH — does NOT depend on the realtime
@@ -1132,6 +1147,68 @@ async function catchUpMessages(){
   }
 }
 
+// ─────────────────────────────────────────────
+// HARD RESET — fully deletes and recreates the Firebase
+// app/database instance in memory. This is what actually
+// happens on a page refresh (fresh connection object), and
+// it's the only thing that reliably recovers a connection
+// Chrome has wedged after 5+ minutes backgrounded — cycling
+// goOffline/goOnline on the SAME instance isn't enough in
+// that case. Session state (username/otherUser/DOM) is
+// untouched, so no re-login and no visible reload happen.
+// ─────────────────────────────────────────────
+async function hardResetConnection(reason){
+  if(!username || !otherUser) return
+  if(hardResetInProgress) return
+  hardResetInProgress = true
+  console.warn('[HardReset] starting — trigger:', reason)
+
+  try{
+    const oldApp = app
+    try{ await deleteApp(oldApp) }catch(e){ console.warn('[HardReset] deleteApp warning:', e) }
+
+    app = initializeApp(firebaseConfig)
+    db = getDatabase(app)
+    rtdbConnected = false
+    seenListener = null // allow markSeenMessages() to re-attach on the new db
+
+    // Re-attach every listener that depends on `db`, pointed at the
+    // fresh instance. Each of these registers brand-new listeners on
+    // the brand-new db — the old ones died with the deleted app, so
+    // nothing here can duplicate.
+    attachConnectionMonitor()
+    attachMessageListeners()
+    attachStatusListener()
+    markSeenMessages()
+    listenNickNames()
+    listenBlockStatus()
+    listenProfilePics()
+    listenTheme()
+    listenGifSuggestions()
+    listenIncomingCalls()
+
+    onValue(ref(db,"typing/"+otherUser),snap=>{
+      const isTyping=snap.val()
+      typingIndicator.style.display=isTyping?"block":"none"
+      typingIndicator.innerText=isTyping?getNick(otherUser)+" is typing...":""
+    })
+
+    const userRef=ref(db,"status/"+username)
+    set(userRef,{online:true,last:Date.now()})
+    onDisconnect(userRef).set({online:false,last:Date.now()})
+    onDisconnect(ref(db,"typing/"+username)).set(false)
+
+    console.log('[HardReset] complete — fresh Firebase connection established')
+    // Catch up on anything sent during the gap, now that the fresh
+    // connection is live.
+    catchUpMessages()
+  } catch(e){
+    console.error('[HardReset] failed:', e)
+  } finally {
+    hardResetInProgress = false
+  }
+}
+
 function forceReconnect(reason){
   if(!username || !otherUser) return // not logged in yet — nothing to resync
   const now = Date.now()
@@ -1151,16 +1228,26 @@ function forceReconnect(reason){
   // can reach the server, even mid-reconnect.
   catchUpMessages()
 
+  // Long background gap (Android/Chrome tab-suspend territory) — skip
+  // straight to the hard reset instead of wasting time on a retry
+  // loop that we already know won't recover this case.
+  const hiddenDuration = hiddenAt ? (Date.now() - hiddenAt) : 0
+  if(hiddenDuration >= HARD_RESET_THRESHOLD_MS){
+    console.log('[Reconnect] hidden for', Math.round(hiddenDuration/1000)+'s — going straight to hard reset')
+    hardResetConnection(reason+' (long-background '+Math.round(hiddenDuration/1000)+'s)')
+    return
+  }
+
   // RETRY LOOP: goOnline() alone can be a no-op if the SDK's internal
   // state doesn't think it's offline yet (common failure mode — the
   // socket is dead but the SDK hasn't detected it). A full
   // goOffline() → goOnline() cycle forces real teardown + reconnect.
   // Keep retrying every 2s, checking the AUTHORITATIVE .info/connected
-  // signal, until it actually reports true (max 10 attempts / ~20s).
-  // The 6s catch-up poll below still guarantees message delivery even
-  // if this retry loop is still working.
+  // signal, until it actually reports true (max 5 attempts / ~10s) —
+  // and if it still hasn't recovered by then, escalate to the hard
+  // reset rather than keep spinning.
   let attempts = 0
-  const maxAttempts = 10
+  const maxAttempts = 5
   const retryTimer = setInterval(()=>{
     attempts++
     if(rtdbConnected){
@@ -1170,8 +1257,9 @@ function forceReconnect(reason){
       return
     }
     if(attempts >= maxAttempts){
-      console.warn('[Reconnect] gave up after', maxAttempts, 'attempts — relying on 6s safety poll')
+      console.warn('[Reconnect] light retry failed after', maxAttempts, 'attempts — escalating to hard reset')
       clearInterval(retryTimer)
+      hardResetConnection(reason+' (retry-loop exhausted)')
       return
     }
     console.log('[Reconnect] attempt', attempts, '— cycling goOffline/goOnline')
@@ -1201,6 +1289,7 @@ document.addEventListener('visibilitychange', () => {
   console.log('[BROWSER] visibility =', document.hidden ? 'hidden' : 'visible')
   if(document.hidden){
     wasHidden = true
+    hiddenAt = Date.now()
   } else if(wasHidden){
     wasHidden = false
     forceReconnect('visibilitychange:visible')
@@ -2158,52 +2247,55 @@ function createMessage(message,key){
   scrollToBottom()
 }
 
-console.log('[CHAT] listener ATTACHED')
-onChildAdded(ref(db,"messages"),data=>{
-  console.log('[CHAT] MESSAGE EVENT RECEIVED, key:', data.key)
-  createMessage(data.val(),data.key)
-  const message=data.val()
-  if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
-    const now=new Date()
-    const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
-    fetch(BACKEND+"/notify",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({text:message.text.startsWith("__voice__")?"🎤 Voice message":message.text.startsWith("__gif__")?"🎞️ GIF":message.text,time})
-    }).catch(()=>{})
-  }
-})
-
-onChildChanged(ref(db,"messages"),data=>{
-  const me=localStorage.getItem("chatUser")||username
-  const message=data.val()
-  const key=data.key
-  const row=document.getElementById(key)
-  if(!row) return
-  if(message.type) return
-
-  const msgDiv=row.querySelector(".msg")
-  if(!msgDiv) return
-
-  if(message.deleted){
-    msgDiv.innerHTML=`<span style="color:#aaa;font-style:italic;font-size:13px;">🚫 Message deleted</span><div class="time">${buildTimeHtml(message,message.name==me)}</div>`
-    return
-  }
-
-  const timeDiv=msgDiv.querySelector(".time")
-  if(timeDiv) timeDiv.innerHTML=buildTimeHtml(message,message.name==me)
-
-  if(message.edited){
-    const textSpan=msgDiv.querySelector(".msgText")
-    if(textSpan){
-      textSpan.innerHTML=message.text.replace(/\n/g,"<br>").replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" style="color:#075E54;word-break:break-all;" onclick="event.stopPropagation()">$1</a>')
+function attachMessageListeners(){
+  console.log('[CHAT] listener ATTACHED')
+  onChildAdded(ref(db,"messages"),data=>{
+    console.log('[CHAT] MESSAGE EVENT RECEIVED, key:', data.key)
+    createMessage(data.val(),data.key)
+    const message=data.val()
+    if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
+      const now=new Date()
+      const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
+      fetch(BACKEND+"/notify",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({text:message.text.startsWith("__voice__")?"🎤 Voice message":message.text.startsWith("__gif__")?"🎞️ GIF":message.text,time})
+      }).catch(()=>{})
     }
-  }
+  })
 
-  const reactionBar=msgDiv.querySelector(".reactionBar")
-  const newReactionHtml=renderReactions(message.reactions,key)
-  if(reactionBar) reactionBar.outerHTML=newReactionHtml||""
-  else if(newReactionHtml) msgDiv.insertAdjacentHTML("beforeend",newReactionHtml)
-})
+  onChildChanged(ref(db,"messages"),data=>{
+    const me=localStorage.getItem("chatUser")||username
+    const message=data.val()
+    const key=data.key
+    const row=document.getElementById(key)
+    if(!row) return
+    if(message.type) return
+
+    const msgDiv=row.querySelector(".msg")
+    if(!msgDiv) return
+
+    if(message.deleted){
+      msgDiv.innerHTML=`<span style="color:#aaa;font-style:italic;font-size:13px;">🚫 Message deleted</span><div class="time">${buildTimeHtml(message,message.name==me)}</div>`
+      return
+    }
+
+    const timeDiv=msgDiv.querySelector(".time")
+    if(timeDiv) timeDiv.innerHTML=buildTimeHtml(message,message.name==me)
+
+    if(message.edited){
+      const textSpan=msgDiv.querySelector(".msgText")
+      if(textSpan){
+        textSpan.innerHTML=message.text.replace(/\n/g,"<br>").replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" style="color:#075E54;word-break:break-all;" onclick="event.stopPropagation()">$1</a>')
+      }
+    }
+
+    const reactionBar=msgDiv.querySelector(".reactionBar")
+    const newReactionHtml=renderReactions(message.reactions,key)
+    if(reactionBar) reactionBar.outerHTML=newReactionHtml||""
+    else if(newReactionHtml) msgDiv.insertAdjacentHTML("beforeend",newReactionHtml)
+  })
+}
+attachMessageListeners()
 
 function markSeenMessages(){
   if(seenListener) return
@@ -2223,24 +2315,27 @@ function formatTime(ts){
   return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:true})
 }
 
-onValue(ref(db,"status"),snap=>{
-  const data=snap.val()
-  if(!data) return
-  const ou=username=="katis1"?"kittyis0001":"katis1"
-  if(data[ou]){
-    const last=data[ou].last
-    const diff=Date.now()-last
-    if(diff<12000){statusText.innerText="Online";return}
-    const now=new Date(),d=new Date(last)
-    const isToday=now.toDateString()===d.toDateString()
-    const yesterday=new Date();yesterday.setDate(now.getDate()-1)
-    const isYesterday=yesterday.toDateString()===d.toDateString()
-    const time=formatTime(last)
-    if(isToday) statusText.innerText="Last seen today at "+time
-    else if(isYesterday) statusText.innerText="Last seen yesterday at "+time
-    else statusText.innerText="Last seen "+d.getDate()+" "+d.toLocaleString('default',{month:'short'})+" at "+time
-  }
-})
+function attachStatusListener(){
+  onValue(ref(db,"status"),snap=>{
+    const data=snap.val()
+    if(!data) return
+    const ou=username=="katis1"?"kittyis0001":"katis1"
+    if(data[ou]){
+      const last=data[ou].last
+      const diff=Date.now()-last
+      if(diff<12000){statusText.innerText="Online";return}
+      const now=new Date(),d=new Date(last)
+      const isToday=now.toDateString()===d.toDateString()
+      const yesterday=new Date();yesterday.setDate(now.getDate()-1)
+      const isYesterday=yesterday.toDateString()===d.toDateString()
+      const time=formatTime(last)
+      if(isToday) statusText.innerText="Last seen today at "+time
+      else if(isYesterday) statusText.innerText="Last seen yesterday at "+time
+      else statusText.innerText="Last seen "+d.getDate()+" "+d.toLocaleString('default',{month:'short'})+" at "+time
+    }
+  })
+}
+attachStatusListener()
 
 // ✅ Global helper — opens the menu with the slide+fade animation.
 window.openMenuBox = function(){
