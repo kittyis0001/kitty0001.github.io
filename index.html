@@ -1012,7 +1012,7 @@ body.dark-theme #blockedBanner {
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
-import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off, goOffline, goOnline }
+import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off, goOnline }
 from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
 
 const firebaseConfig = {
@@ -1027,6 +1027,17 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig)
 const db = getDatabase(app)
+
+// ══════════════════════════════════════════════════════════
+// FIREBASE CONNECTION RECOVERY — fixes Chrome background sync bug
+// ══════════════════════════════════════════════════════════
+
+// 1) Monitor Firebase connection state
+const connectedRef = ref(db, '.info/connected')
+onValue(connectedRef, (snap) => {
+  const connected = snap.val() === true
+  console.log('[RTDB] connected =', connected)
+})
 
 const BACKEND = "https://chat-backend-myvs.onrender.com"
 fetch(BACKEND).catch(()=>{})
@@ -1050,17 +1061,18 @@ const headerName = document.getElementById("headerName")
 let seenListener = null
 
 // ─────────────────────────────────────────────
-// RECONNECT MANAGER — forces the Firebase SDK's own
-// connection to drop and re-establish when the tab
-// returns from background/offline. Chrome silently
-// kills background-tab WebSockets; the SDK doesn't
-// always notice fast enough on its own. Cycling
-// goOffline()/goOnline() forces a real reconnect,
-// and Firebase automatically REPLAYS current data to
-// every already-registered onValue/onChildAdded
-// listener on reconnect — so existing listeners don't
-// need to be removed/re-added, and duplicates can't
-// be created this way.
+// RECONNECT MANAGER — forces the Firebase SDK to
+// reconnect when the tab returns from background/
+// offline. Chrome silently kills background-tab
+// WebSockets and its own reconnect logic doesn't
+// always recover cleanly. Calling goOnline(db) forces
+// a real reconnect attempt, and Firebase automatically
+// REPLAYS current data to every already-registered
+// onValue/onChildAdded listener once reconnected — so
+// existing listeners don't need to be removed/re-added,
+// and duplicates can't be created this way. The
+// .info/connected listener below reports actual
+// connection state for verification/debugging.
 // ─────────────────────────────────────────────
 let wasHidden = false
 let lastResyncTime = 0
@@ -1072,10 +1084,8 @@ let visiblePollInterval = null
 // listener ever reconnecting or replaying. get() pulls
 // the full current message list directly from the
 // server the moment any connection exists, so this is
-// the guaranteed path: even if the WebSocket reconnect
-// signal never fires cleanly (which is the actual
-// failure mode on some Chrome/Android builds), this
-// still delivers missed messages.
+// the guaranteed backup path even if goOnline()/the
+// .info/connected signal is ever delayed.
 // Dedupe against DOM ids — never re-renders a message
 // that's already on screen, so it can never duplicate.
 // ─────────────────────────────────────────────
@@ -1095,6 +1105,7 @@ async function catchUpMessages(){
       Object.keys(data).sort().forEach(key=>{
         if(existingKeys.has(key)) return
         const message = data[key]
+        console.log('[CatchUp] rendering missed message, key:', key)
         createMessage(message,key)
         if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
           const now=new Date()
@@ -1125,22 +1136,20 @@ function forceReconnect(reason){
   if(now - lastResyncTime < 1000) return
   lastResyncTime = now
 
-  console.log("[Reconnect] Triggered by:", reason)
-  try{
-    goOffline(db)
-    setTimeout(()=>{
-      goOnline(db)
-      // Re-assert presence immediately so "Online" status is correct
-      // right away instead of waiting for the next 10s heartbeat.
-      const userRef = ref(db,"status/"+username)
-      set(userRef,{online:true,last:Date.now()})
-    }, 300)
+  console.log('[CHAT] FOREGROUND RESYNC — forcing Firebase reconnect. Trigger:', reason)
+  try {
+    goOnline(db)
   } catch(e){
-    console.error("[Reconnect] Failed:", e)
+    console.error('[Firebase] goOnline failed:', e)
   }
 
-  // Run the guaranteed catch-up fetch immediately too — don't wait on
-  // or depend on the goOffline/goOnline cycle above succeeding.
+  // Re-assert presence immediately so "Online" status is correct
+  // right away instead of waiting for the next 10s heartbeat.
+  const userRef = ref(db,"status/"+username)
+  set(userRef,{online:true,last:Date.now()})
+
+  // Run the guaranteed catch-up fetch too — independent of whether
+  // the goOnline() reconnect and listener replay actually succeed.
   catchUpMessages()
 }
 
@@ -1156,21 +1165,28 @@ function startVisiblePolling(){
 }
 
 // Foreground / backgrounding
-document.addEventListener("visibilitychange", ()=>{
+document.addEventListener('visibilitychange', () => {
+  console.log('[BROWSER] visibility =', document.hidden ? 'hidden' : 'visible')
   if(document.hidden){
     wasHidden = true
   } else if(wasHidden){
     wasHidden = false
-    forceReconnect("visibilitychange:visible")
+    forceReconnect('visibilitychange:visible')
   }
 })
 
 // Network drop / restore
-window.addEventListener("online", ()=>{ forceReconnect("network:online") })
+window.addEventListener('online', () => {
+  console.log('[BROWSER] online event — forcing reconnect')
+  forceReconnect('network:online')
+})
 
 // iOS/Android sometimes fire pageshow (bfcache restore) instead of visibilitychange
-window.addEventListener("pageshow", (e)=>{
-  if(e.persisted) forceReconnect("pageshow:bfcache")
+window.addEventListener('pageshow', (event) => {
+  if(event.persisted){
+    console.log('[CHAT] page restored from bfcache — forcing reconnect')
+    forceReconnect('pageshow:bfcache')
+  }
 })
 
 // ─────────────────────────────────────────────
@@ -1957,6 +1973,7 @@ window.send=async function(){
   }
 
   push(ref(db,"messages"),msgData)
+  console.log('[CHAT] MESSAGE WRITE SUCCESS')
   msgBox.value=""; msgBox.style.height="auto"
   gifPanel.style.display="none"
   set(ref(db,"typing/"+username),false)
@@ -2109,7 +2126,9 @@ function createMessage(message,key){
   scrollToBottom()
 }
 
+console.log('[CHAT] listener ATTACHED')
 onChildAdded(ref(db,"messages"),data=>{
+  console.log('[CHAT] MESSAGE EVENT RECEIVED, key:', data.key)
   createMessage(data.val(),data.key)
   const message=data.val()
   if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
