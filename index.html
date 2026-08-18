@@ -1012,7 +1012,7 @@ body.dark-theme #blockedBanner {
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
-import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off, goOnline }
+import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off, goOffline, goOnline }
 from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
 
 const firebaseConfig = {
@@ -1032,11 +1032,14 @@ const db = getDatabase(app)
 // FIREBASE CONNECTION RECOVERY — fixes Chrome background sync bug
 // ══════════════════════════════════════════════════════════
 
-// 1) Monitor Firebase connection state
+// 1) Monitor Firebase connection state — this is the AUTHORITATIVE
+// signal for whether the socket is actually alive. Everything below
+// keys off this instead of assuming a single goOnline() call worked.
+let rtdbConnected = false
 const connectedRef = ref(db, '.info/connected')
 onValue(connectedRef, (snap) => {
-  const connected = snap.val() === true
-  console.log('[RTDB] connected =', connected)
+  rtdbConnected = snap.val() === true
+  console.log('[RTDB] connected =', rtdbConnected)
 })
 
 const BACKEND = "https://chat-backend-myvs.onrender.com"
@@ -1137,20 +1140,49 @@ function forceReconnect(reason){
   lastResyncTime = now
 
   console.log('[CHAT] FOREGROUND RESYNC — forcing Firebase reconnect. Trigger:', reason)
-  try {
-    goOnline(db)
-  } catch(e){
-    console.error('[Firebase] goOnline failed:', e)
-  }
 
   // Re-assert presence immediately so "Online" status is correct
   // right away instead of waiting for the next 10s heartbeat.
   const userRef = ref(db,"status/"+username)
   set(userRef,{online:true,last:Date.now()})
 
-  // Run the guaranteed catch-up fetch too — independent of whether
-  // the goOnline() reconnect and listener replay actually succeed.
+  // Run the guaranteed catch-up fetch immediately, independent of
+  // connection-state below — it will succeed as soon as ANY request
+  // can reach the server, even mid-reconnect.
   catchUpMessages()
+
+  // RETRY LOOP: goOnline() alone can be a no-op if the SDK's internal
+  // state doesn't think it's offline yet (common failure mode — the
+  // socket is dead but the SDK hasn't detected it). A full
+  // goOffline() → goOnline() cycle forces real teardown + reconnect.
+  // Keep retrying every 2s, checking the AUTHORITATIVE .info/connected
+  // signal, until it actually reports true (max 10 attempts / ~20s).
+  // The 6s catch-up poll below still guarantees message delivery even
+  // if this retry loop is still working.
+  let attempts = 0
+  const maxAttempts = 10
+  const retryTimer = setInterval(()=>{
+    attempts++
+    if(rtdbConnected){
+      console.log('[Reconnect] confirmed connected after', attempts, 'attempt(s)')
+      clearInterval(retryTimer)
+      catchUpMessages() // one more catch-up now that we know we're live
+      return
+    }
+    if(attempts >= maxAttempts){
+      console.warn('[Reconnect] gave up after', maxAttempts, 'attempts — relying on 6s safety poll')
+      clearInterval(retryTimer)
+      return
+    }
+    console.log('[Reconnect] attempt', attempts, '— cycling goOffline/goOnline')
+    try{
+      goOffline(db)
+      setTimeout(()=>{ try{ goOnline(db) }catch(e){ console.error('[Firebase] goOnline failed:', e) } }, 150)
+    } catch(e){
+      console.error('[Firebase] goOffline failed:', e)
+    }
+    catchUpMessages()
+  }, 2000)
 }
 
 // Safety-net poll: while the tab is visible and logged in, periodically
@@ -1161,7 +1193,7 @@ function startVisiblePolling(){
   if(visiblePollInterval) return
   visiblePollInterval = setInterval(()=>{
     if(!document.hidden) catchUpMessages()
-  }, 6000)
+  }, 3000)
 }
 
 // Foreground / backgrounding
