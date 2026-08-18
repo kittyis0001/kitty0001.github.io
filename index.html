@@ -1012,7 +1012,7 @@ body.dark-theme #blockedBanner {
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
-import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off }
+import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off, goOffline, goOnline }
 from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
 
 const firebaseConfig = {
@@ -1050,166 +1050,59 @@ const headerName = document.getElementById("headerName")
 let seenListener = null
 
 // ─────────────────────────────────────────────
-// RECONNECT MANAGER — resyncs Firebase listeners
-// after Chrome tears down background-tab sockets
+// RECONNECT MANAGER — forces the Firebase SDK's own
+// connection to drop and re-establish when the tab
+// returns from background/offline. Chrome silently
+// kills background-tab WebSockets; the SDK doesn't
+// always notice fast enough on its own. Cycling
+// goOffline()/goOnline() forces a real reconnect,
+// and Firebase automatically REPLAYS current data to
+// every already-registered onValue/onChildAdded
+// listener on reconnect — so existing listeners don't
+// need to be removed/re-added, and duplicates can't
+// be created this way.
 // ─────────────────────────────────────────────
-let isResyncing = false
-let lastResyncTime = Date.now()
+let wasHidden = false
+let lastResyncTime = 0
 
-function detachAllListeners(){
-  // off() with no callback removes ALL listeners on that ref,
-  // so re-subscribing later can never create duplicates.
-  off(ref(db, "messages"))
-  off(ref(db, "status"))
-  if(otherUser) off(ref(db, "typing/" + otherUser))
-  off(ref(db, "nicknames"))
-  off(ref(db, "profilePics"))
-  off(ref(db, "theme"))
-  off(ref(db, "gifSuggestions"))
-  if(username && otherUser){
-    off(ref(db, "blocks/"+username+"/"+otherUser))
-    off(ref(db, "blocks/"+otherUser+"/"+username))
-  }
-  if(currentCallId){
-    off(ref(db, "calls/"+currentCallId+"/answer"))
-    off(ref(db, "calls/"+currentCallId+"/status"))
-  }
-  off(ref(db, "calls"))
-  seenListener = null
-}
-
-function reattachAllListeners(){
-  if(!username || !otherUser) return // not logged in yet, nothing to resync
-
-  listenNickNames()
-  listenBlockStatus()
-  listenProfilePics()
-  listenTheme()
-  listenGifSuggestions()
-  markSeenMessages()
-  listenIncomingCalls()
-
-  onValue(ref(db,"typing/"+otherUser),snap=>{
-    const isTyping=snap.val()
-    typingIndicator.style.display=isTyping?"block":"none"
-    typingIndicator.innerText=isTyping?getNick(otherUser)+" is typing...":""
-  })
-
-  onValue(ref(db,"status"),snap=>{
-    const data=snap.val()
-    if(!data) return
-    const ou=username=="katis1"?"kittyis0001":"katis1"
-    if(data[ou]){
-      const last=data[ou].last
-      const diff=Date.now()-last
-      if(diff<12000){statusText.innerText="Online";return}
-      const now=new Date(),d=new Date(last)
-      const isToday=now.toDateString()===d.toDateString()
-      const yesterday=new Date();yesterday.setDate(now.getDate()-1)
-      const isYesterday=yesterday.toDateString()===d.toDateString()
-      const time=formatTime(last)
-      if(isToday) statusText.innerText="Last seen today at "+time
-      else if(isYesterday) statusText.innerText="Last seen yesterday at "+time
-      else statusText.innerText="Last seen "+d.getDate()+" "+d.toLocaleString('default',{month:'short'})+" at "+time
-    }
-  })
-
-  // Re-mark presence immediately so "Online" status is correct right away
-  const userRef=ref(db,"status/"+username)
-  set(userRef,{online:true,last:Date.now()})
-  onDisconnect(userRef).set({online:false,last:Date.now()})
-  onDisconnect(ref(db,"typing/"+username)).set(false)
-
-  // Re-attach the message listener LAST, deduped against messages
-  // already rendered in the DOM before the gap — so a replayed
-  // onChildAdded can never insert a duplicate row.
-  const seenKeys = new Set(
-    Array.from(messagesEl.children).map(el => el.id).filter(Boolean)
-  )
-
-  onChildAdded(ref(db,"messages"),data=>{
-    const key = data.key
-    if(seenKeys.has(key)) return // already rendered before the gap — skip duplicate
-    seenKeys.add(key)
-    createMessage(data.val(),key)
-    const message=data.val()
-    if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
-      const now=new Date()
-      const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
-      fetch(BACKEND+"/notify",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({text:message.text.startsWith("__voice__")?"🎤 Voice message":message.text.startsWith("__gif__")?"🎞️ GIF":message.text,time})
-      }).catch(()=>{})
-    }
-  })
-
-  onChildChanged(ref(db,"messages"),data=>{
-    const me=localStorage.getItem("chatUser")||username
-    const message=data.val()
-    const key=data.key
-    const row=document.getElementById(key)
-    if(!row) return
-    if(message.type) return
-
-    const msgDiv=row.querySelector(".msg")
-    if(!msgDiv) return
-
-    if(message.deleted){
-      msgDiv.innerHTML=`<span style="color:#aaa;font-style:italic;font-size:13px;">🚫 Message deleted</span><div class="time">${buildTimeHtml(message,message.name==me)}</div>`
-      return
-    }
-
-    const timeDiv=msgDiv.querySelector(".time")
-    if(timeDiv) timeDiv.innerHTML=buildTimeHtml(message,message.name==me)
-
-    if(message.edited){
-      const textSpan=msgDiv.querySelector(".msgText")
-      if(textSpan){
-        textSpan.innerHTML=message.text.replace(/\n/g,"<br>").replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" style="color:#075E54;word-break:break-all;" onclick="event.stopPropagation()">$1</a>')
-      }
-    }
-
-    const reactionBar=msgDiv.querySelector(".reactionBar")
-    const newReactionHtml=renderReactions(message.reactions,key)
-    if(reactionBar) reactionBar.outerHTML=newReactionHtml||""
-    else if(newReactionHtml) msgDiv.insertAdjacentHTML("beforeend",newReactionHtml)
-  })
-}
-
-async function resyncApp(reason){
-  if(isResyncing) return
-  if(!username || !otherUser) return // not logged in — nothing to resync
-  // Debounce: ignore resync calls firing within 800ms of each other
-  // (visibilitychange + online can both fire around the same time)
+function forceReconnect(reason){
+  if(!username || !otherUser) return // not logged in yet — nothing to resync
   const now = Date.now()
-  if(now - lastResyncTime < 800) return
+  // Debounce: visibilitychange + online can both fire in the same beat
+  if(now - lastResyncTime < 1000) return
   lastResyncTime = now
 
-  isResyncing = true
-  console.log("[Resync] Triggered by:", reason)
+  console.log("[Reconnect] Triggered by:", reason)
   try{
-    detachAllListeners()
-    reattachAllListeners()
+    goOffline(db)
+    setTimeout(()=>{
+      goOnline(db)
+      // Re-assert presence immediately so "Online" status is correct
+      // right away instead of waiting for the next 10s heartbeat.
+      const userRef = ref(db,"status/"+username)
+      set(userRef,{online:true,last:Date.now()})
+    }, 300)
   } catch(e){
-    console.error("[Resync] Failed:", e)
-  } finally {
-    isResyncing = false
+    console.error("[Reconnect] Failed:", e)
   }
 }
 
 // Foreground / backgrounding
 document.addEventListener("visibilitychange", ()=>{
-  if(!document.hidden){
-    resyncApp("visibilitychange:visible")
+  if(document.hidden){
+    wasHidden = true
+  } else if(wasHidden){
+    wasHidden = false
+    forceReconnect("visibilitychange:visible")
   }
 })
 
 // Network drop / restore
-window.addEventListener("online", ()=>{ resyncApp("network:online") })
+window.addEventListener("online", ()=>{ forceReconnect("network:online") })
 
 // iOS/Android sometimes fire pageshow (bfcache restore) instead of visibilitychange
 window.addEventListener("pageshow", (e)=>{
-  if(e.persisted) resyncApp("pageshow:bfcache")
+  if(e.persisted) forceReconnect("pageshow:bfcache")
 })
 
 // ─────────────────────────────────────────────
