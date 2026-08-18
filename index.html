@@ -1064,6 +1064,59 @@ let seenListener = null
 // ─────────────────────────────────────────────
 let wasHidden = false
 let lastResyncTime = 0
+let catchUpInProgress = false
+let visiblePollInterval = null
+
+// ─────────────────────────────────────────────
+// CATCH-UP FETCH — does NOT depend on the realtime
+// listener ever reconnecting or replaying. get() pulls
+// the full current message list directly from the
+// server the moment any connection exists, so this is
+// the guaranteed path: even if the WebSocket reconnect
+// signal never fires cleanly (which is the actual
+// failure mode on some Chrome/Android builds), this
+// still delivers missed messages.
+// Dedupe against DOM ids — never re-renders a message
+// that's already on screen, so it can never duplicate.
+// ─────────────────────────────────────────────
+async function catchUpMessages(){
+  if(!username || !otherUser) return
+  if(catchUpInProgress) return
+  catchUpInProgress = true
+  try{
+    const snap = await get(ref(db,"messages"))
+    const data = snap.val()
+    if(data){
+      const existingKeys = new Set(
+        Array.from(messagesEl.children).map(el => el.id).filter(Boolean)
+      )
+      // Firebase push keys sort chronologically as strings, so a plain
+      // sort preserves correct message order for anything newly added.
+      Object.keys(data).sort().forEach(key=>{
+        if(existingKeys.has(key)) return
+        const message = data[key]
+        createMessage(message,key)
+        if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
+          const now=new Date()
+          const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
+          fetch(BACKEND+"/notify",{
+            method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({text:message.text.startsWith("__voice__")?"🎤 Voice message":message.text.startsWith("__gif__")?"🎞️ GIF":message.text,time})
+          }).catch(()=>{})
+        }
+        // Immediately mark any newly-caught-up incoming message as seen,
+        // same rule markSeenMessages() already applies.
+        if(message.name && message.name!=username && !message.seen && !message.deleted && !message.type){
+          update(ref(db,"messages/"+key),{seen:true}).catch(()=>{})
+        }
+      })
+    }
+  } catch(e){
+    console.error("[CatchUp] Failed:", e)
+  } finally {
+    catchUpInProgress = false
+  }
+}
 
 function forceReconnect(reason){
   if(!username || !otherUser) return // not logged in yet — nothing to resync
@@ -1085,6 +1138,21 @@ function forceReconnect(reason){
   } catch(e){
     console.error("[Reconnect] Failed:", e)
   }
+
+  // Run the guaranteed catch-up fetch immediately too — don't wait on
+  // or depend on the goOffline/goOnline cycle above succeeding.
+  catchUpMessages()
+}
+
+// Safety-net poll: while the tab is visible and logged in, periodically
+// check for anything the realtime listener might have silently missed
+// (not just after backgrounding — covers any quiet listener drop).
+// Cheap for a 2-person chat; only ever renders genuinely new messages.
+function startVisiblePolling(){
+  if(visiblePollInterval) return
+  visiblePollInterval = setInterval(()=>{
+    if(!document.hidden) catchUpMessages()
+  }, 6000)
 }
 
 // Foreground / backgrounding
@@ -1842,6 +1910,7 @@ window.start=async function(){
   listenIncomingCalls()
   listenTheme()
   listenGifSuggestions()
+  startVisiblePolling()
 
   // ✅ LOGIN SUCCESS — story bar দেখাও
   if(typeof showStoryBar === "function") {
