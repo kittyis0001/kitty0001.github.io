@@ -694,6 +694,14 @@ border-color: rgba(140,110,220,0.55);
 background: rgba(255,255,255,0.95);
 }
 
+ion:absolute; right:8px; bottom:7px;
+width:26px; height:26px; padding:0;
+border:none; border-radius:50%;
+background: linear-gradient(135deg, #7ec8f7, #b09ef5, #e899d4);
+color:white; font-size:14px;
+display:none; align-items:center; justify-content:center;
+cursor:pointer; flex-shrink:0;
+box-shadow:0 2px 8px rgba(160,120,230,0.35);
 #msg:disabled{ background:rgba(220,210,240,0.4); color:rgba(140,120,180,0.5); border-color:rgba(180,160,220,0.2); cursor:not-allowed; }
 
 #sendBtn{
@@ -721,10 +729,10 @@ transition: transform 0.15s, box-shadow 0.15s;
 #typingIndicator{ display:none; padding:4px 14px; font-size:12px; color:#9a8aba; font-style:italic; }
 
 
-/* ════════════════════════════════════
+/* ════════════════════════
    DARK THEME — WhatsApp style
    Applied via body.dark-theme class
-   ════════════════════════════════════ */
+   ════════════════════════ */
 body.dark-theme #chat {
   background: #0b141a !important;
 }
@@ -1011,8 +1019,8 @@ body.dark-theme #blockedBanner {
 
 <script type="module">
 
-import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
-import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off, goOffline, goOnline }
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
+import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off }
 from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
 
 const firebaseConfig = {
@@ -1025,30 +1033,8 @@ const firebaseConfig = {
   appId: "1:1082000480834:web:1f6871c095821e865a2bdb"
 }
 
-// `app`/`db` are `let`, not `const` — after a long background gap we
-// fully delete and recreate the Firebase app instance (see
-// hardResetConnection below), which is the only way we've found to
-// reliably recover a connection Chrome has wedged after 5+ minutes
-// hidden. Every function below reads the current `db` via closure,
-// so reassigning it here is picked up everywhere automatically.
-let app = initializeApp(firebaseConfig)
-let db = getDatabase(app)
-
-// ══════════════════════════════════════════════════════════
-// FIREBASE CONNECTION RECOVERY — fixes Chrome background sync bug
-// ══════════════════════════════════════════════════════════
-
-// 1) Monitor Firebase connection state — this is the AUTHORITATIVE
-// signal for whether the socket is actually alive. Everything below
-// keys off this instead of assuming a single goOnline() call worked.
-let rtdbConnected = false
-function attachConnectionMonitor(){
-  onValue(ref(db, '.info/connected'), (snap) => {
-    rtdbConnected = snap.val() === true
-    console.log('[RTDB] connected =', rtdbConnected)
-  })
-}
-attachConnectionMonitor()
+const app = initializeApp(firebaseConfig)
+const db = getDatabase(app)
 
 const BACKEND = "https://chat-backend-myvs.onrender.com"
 fetch(BACKEND).catch(()=>{})
@@ -1072,242 +1058,67 @@ const headerName = document.getElementById("headerName")
 let seenListener = null
 
 // ─────────────────────────────────────────────
-// RECONNECT MANAGER — forces the Firebase SDK to
-// reconnect when the tab returns from background/
-// offline. Chrome silently kills background-tab
-// WebSockets and its own reconnect logic doesn't
-// always recover cleanly. Calling goOnline(db) forces
-// a real reconnect attempt, and Firebase automatically
-// REPLAYS current data to every already-registered
-// onValue/onChildAdded listener once reconnected — so
-// existing listeners don't need to be removed/re-added,
-// and duplicates can't be created this way. The
-// .info/connected listener below reports actual
-// connection state for verification/debugging.
+// CONNECTION RECOVERY & RESYNC
 // ─────────────────────────────────────────────
-let wasHidden = false
-let hiddenAt = 0
-let lastResyncTime = 0
-let catchUpInProgress = false
-let visiblePollInterval = null
-let hardResetInProgress = false
-// Threshold matches the user-observed pattern: short gaps (~30s-1min)
-// recover fine with a lightweight goOffline/goOnline retry; gaps past
-// this get Chrome's aggressive background-tab socket teardown, which
-// only a full app/db recreation reliably recovers from.
-const HARD_RESET_THRESHOLD_MS = 90 * 1000
+let chatListenerAttached = false
+let wasPreviouslyConnected = false
+let isSyncing = false
 
-// ─────────────────────────────────────────────
-// CATCH-UP FETCH — does NOT depend on the realtime
-// listener ever reconnecting or replaying. get() pulls
-// the full current message list directly from the
-// server the moment any connection exists, so this is
-// the guaranteed backup path even if goOnline()/the
-// .info/connected signal is ever delayed.
-// Dedupe against DOM ids — never re-renders a message
-// that's already on screen, so it can never duplicate.
-// ─────────────────────────────────────────────
-async function catchUpMessages(){
-  if(!username || !otherUser) return
-  if(catchUpInProgress) return
-  catchUpInProgress = true
-  try{
-    const snap = await get(ref(db,"messages"))
+function isMessageRendered(key) {
+  return !!document.getElementById(key)
+}
+
+async function syncMessages(label) {
+  if (isSyncing) { console.log("[CHAT] sync skipped — already in progress"); return }
+  if (!username) { console.log("[CHAT] sync skipped — not logged in"); return }
+  isSyncing = true
+  console.log("[CHAT] FOREGROUND RESYNC (" + label + ")")
+  try {
+    const snap = await get(ref(db, "messages"))
     const data = snap.val()
-    if(data){
-      const existingKeys = new Set(
-        Array.from(messagesEl.children).map(el => el.id).filter(Boolean)
-      )
-      // Firebase push keys sort chronologically as strings, so a plain
-      // sort preserves correct message order for anything newly added.
-      Object.keys(data).sort().forEach(key=>{
-        if(existingKeys.has(key)) return
-        const message = data[key]
-        console.log('[CatchUp] rendering missed message, key:', key)
-        createMessage(message,key)
-        if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
-          const now=new Date()
-          const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
-          fetch(BACKEND+"/notify",{
-            method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({text:message.text.startsWith("__voice__")?"🎤 Voice message":message.text.startsWith("__gif__")?"🎞️ GIF":message.text,time})
-          }).catch(()=>{})
-        }
-        // Immediately mark any newly-caught-up incoming message as seen,
-        // same rule markSeenMessages() already applies.
-        if(message.name && message.name!=username && !message.seen && !message.deleted && !message.type){
-          update(ref(db,"messages/"+key),{seen:true}).catch(()=>{})
-        }
-      })
+    if (!data) {
+      console.log("[CHAT] sync — no messages in database")
+      isSyncing = false
+      return
     }
-  } catch(e){
-    console.error("[CatchUp] Failed:", e)
-  } finally {
-    catchUpInProgress = false
-  }
-}
-
-// ─────────────────────────────────────────────
-// HARD RESET — fully deletes and recreates the Firebase
-// app/database instance in memory. This is what actually
-// happens on a page refresh (fresh connection object), and
-// it's the only thing that reliably recovers a connection
-// Chrome has wedged after 5+ minutes backgrounded — cycling
-// goOffline/goOnline on the SAME instance isn't enough in
-// that case. Session state (username/otherUser/DOM) is
-// untouched, so no re-login and no visible reload happen.
-// ─────────────────────────────────────────────
-async function hardResetConnection(reason){
-  if(!username || !otherUser) return
-  if(hardResetInProgress) return
-  hardResetInProgress = true
-  console.warn('[HardReset] starting — trigger:', reason)
-
-  try{
-    const oldApp = app
-    try{ await deleteApp(oldApp) }catch(e){ console.warn('[HardReset] deleteApp warning:', e) }
-
-    app = initializeApp(firebaseConfig)
-    db = getDatabase(app)
-    rtdbConnected = false
-    seenListener = null // allow markSeenMessages() to re-attach on the new db
-
-    // Re-attach every listener that depends on `db`, pointed at the
-    // fresh instance. Each of these registers brand-new listeners on
-    // the brand-new db — the old ones died with the deleted app, so
-    // nothing here can duplicate.
-    attachConnectionMonitor()
-    attachMessageListeners()
-    attachStatusListener()
-    markSeenMessages()
-    listenNickNames()
-    listenBlockStatus()
-    listenProfilePics()
-    listenTheme()
-    listenGifSuggestions()
-    listenIncomingCalls()
-
-    onValue(ref(db,"typing/"+otherUser),snap=>{
-      const isTyping=snap.val()
-      typingIndicator.style.display=isTyping?"block":"none"
-      typingIndicator.innerText=isTyping?getNick(otherUser)+" is typing...":""
+    let addedCount = 0
+    Object.keys(data).forEach(key => {
+      if (!isMessageRendered(key)) {
+        console.log("[CHAT] MESSAGE EVENT RECEIVED (missed key: " + key + ")")
+        createMessage(data[key], key)
+        addedCount++
+      }
     })
-
-    const userRef=ref(db,"status/"+username)
-    set(userRef,{online:true,last:Date.now()})
-    onDisconnect(userRef).set({online:false,last:Date.now()})
-    onDisconnect(ref(db,"typing/"+username)).set(false)
-
-    console.log('[HardReset] complete — fresh Firebase connection established')
-    // Catch up on anything sent during the gap, now that the fresh
-    // connection is live.
-    catchUpMessages()
-  } catch(e){
-    console.error('[HardReset] failed:', e)
-  } finally {
-    hardResetInProgress = false
+    if (addedCount > 0) {
+      scrollToBottom()
+      console.log("[CHAT] sync complete — " + addedCount + " missed message(s) recovered")
+    } else {
+      console.log("[CHAT] sync complete — no missed messages")
+    }
+    // Re-mark seen for any unseen incoming messages
+    Object.keys(data).forEach(key => {
+      const msg = data[key]
+      if (msg.name && msg.name !== username && !msg.seen && !msg.deleted && !msg.type) {
+        update(ref(db, "messages/" + key), { seen: true })
+      }
+    })
+  } catch (e) {
+    console.error("[CHAT] sync FAILED:", e)
   }
+  isSyncing = false
 }
 
-function forceReconnect(reason){
-  if(!username || !otherUser) return // not logged in yet — nothing to resync
-  const now = Date.now()
-  // Debounce: visibilitychange + online can both fire in the same beat
-  if(now - lastResyncTime < 1000) return
-  lastResyncTime = now
-
-  console.log('[CHAT] FOREGROUND RESYNC — forcing Firebase reconnect. Trigger:', reason)
-
-  // Re-assert presence immediately so "Online" status is correct
-  // right away instead of waiting for the next 10s heartbeat.
-  const userRef = ref(db,"status/"+username)
-  set(userRef,{online:true,last:Date.now()})
-
-  // Run the guaranteed catch-up fetch immediately, independent of
-  // connection-state below — it will succeed as soon as ANY request
-  // can reach the server, even mid-reconnect.
-  catchUpMessages()
-
-  // Long background gap (Android/Chrome tab-suspend territory) — skip
-  // straight to the hard reset instead of wasting time on a retry
-  // loop that we already know won't recover this case.
-  const hiddenDuration = hiddenAt ? (Date.now() - hiddenAt) : 0
-  if(hiddenDuration >= HARD_RESET_THRESHOLD_MS){
-    console.log('[Reconnect] hidden for', Math.round(hiddenDuration/1000)+'s — going straight to hard reset')
-    hardResetConnection(reason+' (long-background '+Math.round(hiddenDuration/1000)+'s)')
-    return
-  }
-
-  // RETRY LOOP: goOnline() alone can be a no-op if the SDK's internal
-  // state doesn't think it's offline yet (common failure mode — the
-  // socket is dead but the SDK hasn't detected it). A full
-  // goOffline() → goOnline() cycle forces real teardown + reconnect.
-  // Keep retrying every 2s, checking the AUTHORITATIVE .info/connected
-  // signal, until it actually reports true (max 5 attempts / ~10s) —
-  // and if it still hasn't recovered by then, escalate to the hard
-  // reset rather than keep spinning.
-  let attempts = 0
-  const maxAttempts = 5
-  const retryTimer = setInterval(()=>{
-    attempts++
-    if(rtdbConnected){
-      console.log('[Reconnect] confirmed connected after', attempts, 'attempt(s)')
-      clearInterval(retryTimer)
-      catchUpMessages() // one more catch-up now that we know we're live
-      return
+// Monitor Firebase connection state globally
+onValue(ref(db, ".info/connected"), snap => {
+  const connected = snap.val()
+  console.log("[RTDB] connected = " + connected)
+  if (connected && !wasPreviouslyConnected) {
+    console.log("[RTDB] RECONNECTED")
+    if (chatListenerAttached && username) {
+      setTimeout(() => syncMessages("reconnect"), 500)
     }
-    if(attempts >= maxAttempts){
-      console.warn('[Reconnect] light retry failed after', maxAttempts, 'attempts — escalating to hard reset')
-      clearInterval(retryTimer)
-      hardResetConnection(reason+' (retry-loop exhausted)')
-      return
-    }
-    console.log('[Reconnect] attempt', attempts, '— cycling goOffline/goOnline')
-    try{
-      goOffline(db)
-      setTimeout(()=>{ try{ goOnline(db) }catch(e){ console.error('[Firebase] goOnline failed:', e) } }, 150)
-    } catch(e){
-      console.error('[Firebase] goOffline failed:', e)
-    }
-    catchUpMessages()
-  }, 2000)
-}
-
-// Safety-net poll: while the tab is visible and logged in, periodically
-// check for anything the realtime listener might have silently missed
-// (not just after backgrounding — covers any quiet listener drop).
-// Cheap for a 2-person chat; only ever renders genuinely new messages.
-function startVisiblePolling(){
-  if(visiblePollInterval) return
-  visiblePollInterval = setInterval(()=>{
-    if(!document.hidden) catchUpMessages()
-  }, 3000)
-}
-
-// Foreground / backgrounding
-document.addEventListener('visibilitychange', () => {
-  console.log('[BROWSER] visibility =', document.hidden ? 'hidden' : 'visible')
-  if(document.hidden){
-    wasHidden = true
-    hiddenAt = Date.now()
-  } else if(wasHidden){
-    wasHidden = false
-    forceReconnect('visibilitychange:visible')
   }
-})
-
-// Network drop / restore
-window.addEventListener('online', () => {
-  console.log('[BROWSER] online event — forcing reconnect')
-  forceReconnect('network:online')
-})
-
-// iOS/Android sometimes fire pageshow (bfcache restore) instead of visibilitychange
-window.addEventListener('pageshow', (event) => {
-  if(event.persisted){
-    console.log('[CHAT] page restored from bfcache — forcing reconnect')
-    forceReconnect('pageshow:bfcache')
-  }
+  wasPreviouslyConnected = connected
 })
 
 // ─────────────────────────────────────────────
@@ -1370,7 +1181,7 @@ updateGifToggleLabel()
 // ─────────────────────────────────────────────
 let profilePics = {}
 
-const DEFAULT_PIC = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMwNzVFNTQiLz48Y2lyY2xlIGN4PSIyMCIgY3k9IjE1IiByPSI3IiBmaWxsPSJ3aGl0ZSIvPjxlbGxpcHNlIGN4PSIyMCIgY3k9IjM0IiByeD0iMTIiIHJ5PSI4IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg=="
+const DEFAULT_PIC = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMwNzVFNTQiLz48Y2lyY2xlIGN4PSIyMCIgY3k9IjE1IiByPSI3IiBmaWxscz0id2hpdGUiLz48Y2xsaXBzZSBjeD0iMjAiIGN5PSIzNCIgcng9IjEyIiByeT0iOCIgZmlsbD0id2hpdGUiLz48L3N2Zz4="
 
 function getAvatar(user){
   return profilePics[user] || DEFAULT_PIC
@@ -1444,11 +1255,11 @@ function refreshAllDisplayNames(){
   })
 }
 
-// ════════════════════════════════════
+// ════════════════════════
 // DARK THEME — Firebase sync
 // Shared key: "theme" (no per-user path)
 // Both users see same theme instantly.
-// ════════════════════════════════════
+// ════════════════════════
 let _themeRef = null
 
 function listenTheme() {
@@ -2028,10 +1839,44 @@ window.start=async function(){
   onDisconnect(userRef).set({online:false,last:Date.now()})
   onDisconnect(ref(db,"typing/"+username)).set(false)
 
+  console.log("[AUTH] STATE CHANGED — user:", username)
+
   document.addEventListener("visibilitychange",()=>{
-    if(document.hidden) set(userRef,{online:false,last:Date.now()})
-    else set(userRef,{online:true,last:Date.now()})
+    if(document.hidden){
+      console.log("[BROWSER] visibility = hidden")
+      set(userRef,{online:false,last:Date.now()})
+    } else {
+      console.log("[BROWSER] visibility = visible")
+      set(userRef,{online:true,last:Date.now()})
+      if(chatListenerAttached){
+        setTimeout(()=>syncMessages("visibilitychange"), 400)
+      }
+    }
   })
+
+  window.addEventListener("focus",()=>{
+    console.log("[BROWSER] focus")
+    if(chatListenerAttached && username){
+      setTimeout(()=>syncMessages("focus"), 300)
+    }
+  })
+
+  window.addEventListener("pageshow",(e)=>{
+    if(e.persisted){
+      console.log("[BROWSER] pageshow (restored from bfcache)")
+      if(chatListenerAttached && username){
+        setTimeout(()=>syncMessages("pageshow"), 500)
+      }
+    }
+  })
+
+  window.addEventListener("online",()=>{
+    console.log("[BROWSER] online")
+    if(chatListenerAttached && username){
+      setTimeout(()=>syncMessages("online"), 500)
+    }
+  })
+
   setInterval(()=>set(userRef,{online:true,last:Date.now()}),10000)
 
   onValue(ref(db,"typing/"+otherUser),snap=>{
@@ -2047,7 +1892,6 @@ window.start=async function(){
   listenIncomingCalls()
   listenTheme()
   listenGifSuggestions()
-  startVisiblePolling()
 
   // ✅ LOGIN SUCCESS — story bar দেখাও
   if(typeof showStoryBar === "function") {
@@ -2073,6 +1917,7 @@ window.send=async function(){
 
   if(editingKey){
     await update(ref(db,"messages/"+editingKey),{text:text,edited:true})
+    console.log("[CHAT] MESSAGE WRITE SUCCESS (edit)")
     editingKey=null; editBar.style.display="none"
     sendBtn.innerText="➤"
     msgBox.value=""; msgBox.style.height="auto"
@@ -2094,7 +1939,8 @@ window.send=async function(){
   }
 
   push(ref(db,"messages"),msgData)
-  console.log('[CHAT] MESSAGE WRITE SUCCESS')
+    .then(()=>{ console.log("[CHAT] MESSAGE WRITE SUCCESS") })
+    .catch(e=>{ console.error("[CHAT] MESSAGE WRITE FAILED:", e) })
   msgBox.value=""; msgBox.style.height="auto"
   gifPanel.style.display="none"
   set(ref(db,"typing/"+username),false)
@@ -2153,6 +1999,10 @@ function buildTimeHtml(message,isMe){
 }
 
 function createMessage(message,key){
+  if(key && document.getElementById(key)){
+    console.log("[CHAT] MESSAGE EVENT RECEIVED — skipped duplicate key: " + key)
+    return
+  }
   if(message.type==="system"){
     const div=document.createElement("div")
     div.className="sysMsg"
@@ -2247,55 +2097,54 @@ function createMessage(message,key){
   scrollToBottom()
 }
 
-function attachMessageListeners(){
-  console.log('[CHAT] listener ATTACHED')
-  onChildAdded(ref(db,"messages"),data=>{
-    console.log('[CHAT] MESSAGE EVENT RECEIVED, key:', data.key)
-    createMessage(data.val(),data.key)
-    const message=data.val()
-    if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
-      const now=new Date()
-      const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
-      fetch(BACKEND+"/notify",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({text:message.text.startsWith("__voice__")?"🎤 Voice message":message.text.startsWith("__gif__")?"🎞️ GIF":message.text,time})
-      }).catch(()=>{})
+console.log("[CHAT] listener ATTACHED")
+chatListenerAttached = true
+
+onChildAdded(ref(db,"messages"),data=>{
+  const message=data.val()
+  console.log("[CHAT] MESSAGE EVENT RECEIVED (key: " + data.key + ")")
+  createMessage(message,data.key)
+  if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
+    const now=new Date()
+    const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
+    fetch(BACKEND+"/notify",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text:message.text.startsWith("__voice__")?"🎤 Voice message":message.text.startsWith("__gif__")?"🎞️ GIF":message.text,time})
+    }).catch(()=>{})
+  }
+})
+
+onChildChanged(ref(db,"messages"),data=>{
+  const me=localStorage.getItem("chatUser")||username
+  const message=data.val()
+  const key=data.key
+  const row=document.getElementById(key)
+  if(!row) return
+  if(message.type) return
+
+  const msgDiv=row.querySelector(".msg")
+  if(!msgDiv) return
+
+  if(message.deleted){
+    msgDiv.innerHTML=`<span style="color:#aaa;font-style:italic;font-size:13px;">🚫 Message deleted</span><div class="time">${buildTimeHtml(message,message.name==me)}</div>`
+    return
+  }
+
+  const timeDiv=msgDiv.querySelector(".time")
+  if(timeDiv) timeDiv.innerHTML=buildTimeHtml(message,message.name==me)
+
+  if(message.edited){
+    const textSpan=msgDiv.querySelector(".msgText")
+    if(textSpan){
+      textSpan.innerHTML=message.text.replace(/\n/g,"<br>").replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" style="color:#075E54;word-break:break-all;" onclick="event.stopPropagation()">$1</a>')
     }
-  })
+  }
 
-  onChildChanged(ref(db,"messages"),data=>{
-    const me=localStorage.getItem("chatUser")||username
-    const message=data.val()
-    const key=data.key
-    const row=document.getElementById(key)
-    if(!row) return
-    if(message.type) return
-
-    const msgDiv=row.querySelector(".msg")
-    if(!msgDiv) return
-
-    if(message.deleted){
-      msgDiv.innerHTML=`<span style="color:#aaa;font-style:italic;font-size:13px;">🚫 Message deleted</span><div class="time">${buildTimeHtml(message,message.name==me)}</div>`
-      return
-    }
-
-    const timeDiv=msgDiv.querySelector(".time")
-    if(timeDiv) timeDiv.innerHTML=buildTimeHtml(message,message.name==me)
-
-    if(message.edited){
-      const textSpan=msgDiv.querySelector(".msgText")
-      if(textSpan){
-        textSpan.innerHTML=message.text.replace(/\n/g,"<br>").replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" style="color:#075E54;word-break:break-all;" onclick="event.stopPropagation()">$1</a>')
-      }
-    }
-
-    const reactionBar=msgDiv.querySelector(".reactionBar")
-    const newReactionHtml=renderReactions(message.reactions,key)
-    if(reactionBar) reactionBar.outerHTML=newReactionHtml||""
-    else if(newReactionHtml) msgDiv.insertAdjacentHTML("beforeend",newReactionHtml)
-  })
-}
-attachMessageListeners()
+  const reactionBar=msgDiv.querySelector(".reactionBar")
+  const newReactionHtml=renderReactions(message.reactions,key)
+  if(reactionBar) reactionBar.outerHTML=newReactionHtml||""
+  else if(newReactionHtml) msgDiv.insertAdjacentHTML("beforeend",newReactionHtml)
+})
 
 function markSeenMessages(){
   if(seenListener) return
@@ -2315,27 +2164,24 @@ function formatTime(ts){
   return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:true})
 }
 
-function attachStatusListener(){
-  onValue(ref(db,"status"),snap=>{
-    const data=snap.val()
-    if(!data) return
-    const ou=username=="katis1"?"kittyis0001":"katis1"
-    if(data[ou]){
-      const last=data[ou].last
-      const diff=Date.now()-last
-      if(diff<12000){statusText.innerText="Online";return}
-      const now=new Date(),d=new Date(last)
-      const isToday=now.toDateString()===d.toDateString()
-      const yesterday=new Date();yesterday.setDate(now.getDate()-1)
-      const isYesterday=yesterday.toDateString()===d.toDateString()
-      const time=formatTime(last)
-      if(isToday) statusText.innerText="Last seen today at "+time
-      else if(isYesterday) statusText.innerText="Last seen yesterday at "+time
-      else statusText.innerText="Last seen "+d.getDate()+" "+d.toLocaleString('default',{month:'short'})+" at "+time
-    }
-  })
-}
-attachStatusListener()
+onValue(ref(db,"status"),snap=>{
+  const data=snap.val()
+  if(!data) return
+  const ou=username=="katis1"?"kittyis0001":"katis1"
+  if(data[ou]){
+    const last=data[ou].last
+    const diff=Date.now()-last
+    if(diff<12000){statusText.innerText="Online";return}
+    const now=new Date(),d=new Date(last)
+    const isToday=now.toDateString()===d.toDateString()
+    const yesterday=new Date();yesterday.setDate(now.getDate()-1)
+    const isYesterday=yesterday.toDateString()===d.toDateString()
+    const time=formatTime(last)
+    if(isToday) statusText.innerText="Last seen today at "+time
+    else if(isYesterday) statusText.innerText="Last seen yesterday at "+time
+    else statusText.innerText="Last seen "+d.getDate()+" "+d.toLocaleString('default',{month:'short'})+" at "+time
+  }
+})
 
 // ✅ Global helper — opens the menu with the slide+fade animation.
 window.openMenuBox = function(){
@@ -2376,8 +2222,12 @@ window.triggerImageUpload = function(){
 
 window.deleteAll=function(){
   if(confirm("Delete all chat?")){
+    isSyncing = true   // block any in-flight sync from re-adding messages
     remove(ref(db,"messages"))
+      .then(()=>{ console.log("[CHAT] deleteAll — messages removed from Firebase") })
+      .catch(e=>{ console.error("[CHAT] deleteAll FAILED:", e) })
     messagesEl.innerHTML=""
+    isSyncing = false
     closeMenuBox()
   }
 }
