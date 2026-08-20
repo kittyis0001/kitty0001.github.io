@@ -15,7 +15,6 @@ background-attachment:fixed;
 height:100vh;
 }
 
-
 /* ═══════════════════════════════════════════════════════
    ACCESS KEY PAGE — simple, original design
    ═══════════════════════════════════════════════════════ */
@@ -259,9 +258,6 @@ z-index:100;
 border-radius:20px;
 overflow:hidden;
 min-width:210px;
-/* ── WhatsApp-style open/close animation ──
-   Starts scaled-down + shifted up near the top-right corner
-   (where the 3-dot icon is) and slides/fades into place. */
 transform-origin: top right;
 transform: scale(0.85) translateY(-12px);
 opacity: 0;
@@ -325,14 +321,12 @@ transition:transform 0.2s ease;
 box-shadow:0 2px 10px rgba(140,100,200,0.15);
 }
 
-/* Outgoing — blue to pink gradient like reference */
 .me .msg{
 background: linear-gradient(135deg, #7ec8f7 0%, #b09ef5 50%, #e899d4 100%);
 color: white;
 border-bottom-right-radius: 5px;
 }
 
-/* Incoming — white soft glass */
 .other .msg{
 background: rgba(255,255,255,0.75);
 backdrop-filter: blur(10px);
@@ -745,7 +739,6 @@ body.dark-theme #statusText  { color: #8696a0 !important; }
 body.dark-theme #callBtn     { color: #8696a0 !important; }
 body.dark-theme #menu        { color: #8696a0 !important; }
 
-/* Bubbles */
 body.dark-theme .me .msg {
   background: #005c4b !important;
   color: #e9edef !important;
@@ -759,12 +752,10 @@ body.dark-theme .time {
   color: #8696a0 !important;
 }
 
-/* Message background / scroll area */
 body.dark-theme #messages {
   background: transparent !important;
 }
 
-/* Input area */
 body.dark-theme #inputArea {
   background: #1f2c34 !important;
   border-top: 1px solid rgba(255,255,255,0.06) !important;
@@ -776,7 +767,6 @@ body.dark-theme #msg {
 }
 body.dark-theme #msg::placeholder { color: #8696a0 !important; }
 
-/* 3-dot menu */
 body.dark-theme #menuBox {
   background: #233138 !important;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
@@ -792,13 +782,11 @@ body.dark-theme #blockBtn {
   color: #ef9a9a !important;
 }
 
-/* System messages */
 body.dark-theme .sysMsg {
   background: rgba(17,27,33,0.85) !important;
   color: #8696a0 !important;
 }
 
-/* Reply bar */
 body.dark-theme #replyBar {
   background: #1f2c34 !important;
   border-top-color: #00a884 !important;
@@ -807,28 +795,23 @@ body.dark-theme #replyBar .replyBarContent { color: #e9edef !important; }
 body.dark-theme #replyBar .replyBarName    { color: #00a884 !important; }
 body.dark-theme #replyBarClose             { color: #8696a0 !important; }
 
-/* Edit bar */
 body.dark-theme #editBar {
   background: #1f2c34 !important;
   color: #8696a0 !important;
   border-top-color: #ffd54f !important;
 }
 
-/* Emoji box */
 body.dark-theme #emojiBox {
   background: #233138 !important;
   border-top: 1px solid rgba(255,255,255,0.06) !important;
 }
 
-/* Voice record bar */
 body.dark-theme #voiceRecordBar {
   background: #1f2c34 !important;
 }
 
-/* Typing indicator */
 body.dark-theme #typingIndicator { color: #8696a0 !important; }
 
-/* Blocked banner */
 body.dark-theme #blockedBanner {
   background: rgba(40,20,20,0.9) !important;
   color: #ef9a9a !important;
@@ -872,11 +855,8 @@ body.dark-theme #blockedBanner {
   <div id="menu" onclick="toggleMenu()">⋮</div>
 </div>
 
-<!-- ✅ storyBar এখানে story.js inject করবে — header এর পরে -->
-
 <div id="menuBox">
   <div onclick="triggerImageUpload()">🖼️ Upload Image</div>
-
   <div onclick="openNickModal()">✏️ Change Nick Name</div>
   <div onclick="changeProfilePic()">🖼️ Change Profile Pic</div>
   <div id="gifToggleItem" onclick="toggleGifSuggestions()">☑️ GIF Suggestions</div>
@@ -1012,7 +992,6 @@ body.dark-theme #blockedBanner {
   <source src="https://www.soundjay.com/phone/sounds/phone-calling-1.mp3" type="audio/mpeg">
 </audio>
 
-<!-- ✅ story.js আগে load করো — module script এর আগে -->
 <script src="story.js"></script>
 <script src="story-editor.js"></script>
 <script src="shorts.js"></script>
@@ -1020,7 +999,7 @@ body.dark-theme #blockedBanner {
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
-import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off }
+import { getDatabase, ref, push, onChildAdded, onChildChanged, remove, set, onValue, onDisconnect, update, get, off, goOffline, goOnline }
 from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
 
 const firebaseConfig = {
@@ -1058,75 +1037,168 @@ const headerName = document.getElementById("headerName")
 let seenListener = null
 
 // ─────────────────────────────────────────────
-// CONNECTION RECOVERY & RESYNC
+// CONNECTION RECOVERY & RESYNC ARCHITECTURE
 // ─────────────────────────────────────────────
-let chatListenerAttached = false
 let wasPreviouslyConnected = false
 let isSyncing = false
+let onChildAddedUnsub = null
+let onChildChangedUnsub = null
 
 function isMessageRendered(key) {
   return !!document.getElementById(key)
 }
 
 async function syncMessages(label) {
-  if (isSyncing) { console.log("[CHAT] sync skipped — already in progress"); return }
-  if (!username) { console.log("[CHAT] sync skipped — not logged in"); return }
+  if (isSyncing) { console.log("[Chat] Sync skipped — already in progress"); return }
+  if (!username) { console.log("[Chat] Sync skipped — not logged in"); return }
+  
+  // Wait for Firebase to confirm it is actually online
+  let attempts = 0
+  while (!wasPreviouslyConnected && attempts < 10) {
+    await new Promise(r => setTimeout(r, 300))
+    attempts++
+  }
+  if (!wasPreviouslyConnected) {
+    console.error("[Chat] Sync failed — still offline")
+    return
+  }
+
   isSyncing = true
-  console.log("[CHAT] FOREGROUND RESYNC (" + label + ")")
+  console.log("[Chat] Foreground Sync (" + label + ")")
+  
   try {
     const snap = await get(ref(db, "messages"))
-    const data = snap.val()
-    if (!data) {
-      console.log("[CHAT] sync — no messages in database")
+    if (!snap.exists()) {
+      console.log("[Messages] Sync Complete — no messages in database")
       isSyncing = false
       return
     }
-    let addedCount = 0
-    Object.keys(data).forEach(key => {
+    
+    let recoveredCount = 0
+    snap.forEach(child => {
+      const key = child.key
+      const msg = child.val()
+      
       if (!isMessageRendered(key)) {
-        console.log("[CHAT] MESSAGE EVENT RECEIVED (missed key: " + key + ")")
-        createMessage(data[key], key)
-        addedCount++
+        createMessage(msg, key)
+        recoveredCount++
       }
-    })
-    if (addedCount > 0) {
-      scrollToBottom()
-      console.log("[CHAT] sync complete — " + addedCount + " missed message(s) recovered")
-    } else {
-      console.log("[CHAT] sync complete — no missed messages")
-    }
-    // Re-mark seen for any unseen incoming messages
-    Object.keys(data).forEach(key => {
-      const msg = data[key]
+      
+      // Mark seen for any unseen incoming messages
       if (msg.name && msg.name !== username && !msg.seen && !msg.deleted && !msg.type) {
         update(ref(db, "messages/" + key), { seen: true })
       }
     })
+    
+    if (recoveredCount > 0) {
+      scrollToBottom()
+      console.log("[Messages] Sync Complete — recovered " + recoveredCount + " message(s)")
+    } else {
+      console.log("[Messages] Sync Complete — no missing messages")
+    }
   } catch (e) {
-    console.error("[CHAT] sync FAILED:", e)
+    console.error("[Chat] Sync FAILED:", e)
   }
   isSyncing = false
+}
+
+function attachChatListeners() {
+  if (onChildAddedUnsub) return
+  console.log("[Chat] Listener Attached")
+  
+  onChildAddedUnsub = onChildAdded(ref(db, "messages"), data => {
+    const message = data.val()
+    createMessage(message, data.key)
+    if (message.time > appStartTime && message.name === "kittyis0001" && !message.type) {
+      const now = new Date()
+      const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      fetch(BACKEND + "/notify", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: message.text.startsWith("__voice__") ? "🎤 Voice message" : message.text.startsWith("__gif__") ? "🎞️ GIF" : message.text, time })
+      }).catch(() => {})
+    }
+  })
+
+  onChildChangedUnsub = onChildChanged(ref(db, "messages"), data => {
+    const me = localStorage.getItem("chatUser") || username
+    const message = data.val()
+    const key = data.key
+    const row = document.getElementById(key)
+    if (!row) return
+    if (message.type) return
+
+    const msgDiv = row.querySelector(".msg")
+    if (!msgDiv) return
+
+    if (message.deleted) {
+      msgDiv.innerHTML = `<span style="color:#aaa;font-style:italic;font-size:13px;">🚫 Message deleted</span><div class="time">${buildTimeHtml(message, message.name == me)}</div>`
+      return
+    }
+
+    const timeDiv = msgDiv.querySelector(".time")
+    if (timeDiv) timeDiv.innerHTML = buildTimeHtml(message, message.name == me)
+
+    if (message.edited) {
+      const textSpan = msgDiv.querySelector(".msgText")
+      if (textSpan) {
+        textSpan.innerHTML = message.text.replace(/\n/g, "<br>").replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" style="color:#075E54;word-break:break-all;" onclick="event.stopPropagation()">$1</a>')
+      }
+    }
+
+    const reactionBar = msgDiv.querySelector(".reactionBar")
+    const newReactionHtml = renderReactions(message.reactions, key)
+    if (reactionBar) reactionBar.outerHTML = newReactionHtml || ""
+    else if (newReactionHtml) msgDiv.insertAdjacentHTML("beforeend", newReactionHtml)
+  })
+}
+
+function detachChatListeners() {
+  if (onChildAddedUnsub) { onChildAddedUnsub(); onChildAddedUnsub = null }
+  if (onChildChangedUnsub) { onChildChangedUnsub(); onChildChangedUnsub = null }
+  console.log("[Chat] Listener Detached")
 }
 
 // Monitor Firebase connection state globally
 onValue(ref(db, ".info/connected"), snap => {
   const connected = snap.val()
-  console.log("[RTDB] connected = " + connected)
-  if (connected && !wasPreviouslyConnected) {
-    console.log("[RTDB] RECONNECTED")
-    if (chatListenerAttached && username) {
+  if (connected) console.log("[Firebase] Connected")
+  else console.log("[Firebase] Disconnected")
+  
+  if (connected) {
+    if (!wasPreviouslyConnected) {
+      console.log("[Firebase] Reconnected")
+      
+      if (username) {
+        console.log("[Presence] Online")
+        const userRef = ref(db, "status/" + username)
+        set(userRef, { online: true, last: Date.now() })
+        onDisconnect(userRef).set({ online: false, last: Date.now() })
+        onDisconnect(ref(db, "typing/" + username)).set(false)
+      }
+      
+      // Force listener refresh to avoid stale resume tokens
+      console.log("[Chat] Listener Reattached")
+      detachChatListeners()
+      attachChatListeners()
+      
       setTimeout(() => syncMessages("reconnect"), 500)
     }
+  } else {
+    if (username) {
+      console.log("[Presence] Offline")
+    }
   }
+  
   wasPreviouslyConnected = connected
 })
 
+// Initial attach
+attachChatListeners()
+
 // ─────────────────────────────────────────────
 // GIF ON/OFF TOGGLE
-// (Firebase-backed, same persistence pattern as Dark Theme —
-// survives logout, refresh, and re-login on any device.)
 // ─────────────────────────────────────────────
-let gifEnabled = false   // default OFF; corrected instantly once Firebase value loads
+let gifEnabled = false
 let _gifRef = null
 
 function updateGifToggleLabel(){
@@ -1139,16 +1211,7 @@ function listenGifSuggestions(){
   _gifRef = ref(db, "gifSuggestions")
   onValue(_gifRef, snap => {
     const val = snap.val()
-
     if (val === null) {
-      // Firebase has never been written for this path yet — this is
-      // the very first login since switching from localStorage to
-      // Firebase. If the user had previously set a preference in
-      // localStorage (from before this change), migrate it into
-      // Firebase now instead of silently discarding it and resetting
-      // to "on". This onValue callback will fire again once the
-      // migration write completes, so no further action is needed
-      // here beyond kicking that write off.
       const legacyVal = localStorage.getItem("gifSuggestions")
       const migratedVal = legacyVal === "on" ? "on" : "off"
       set(ref(db, "gifSuggestions"), migratedVal).catch(()=>{})
@@ -1156,7 +1219,6 @@ function listenGifSuggestions(){
     } else {
       gifEnabled = val === "on"
     }
-
     updateGifToggleLabel()
     if(!gifEnabled) hideGifPanel()
   })
@@ -1165,12 +1227,9 @@ function listenGifSuggestions(){
 window.toggleGifSuggestions = function(){
   closeMenuBox()
   const newVal = !gifEnabled
-  // Apply locally immediately — instant feedback, doesn't wait on the
-  // Firebase round-trip.
   gifEnabled = newVal
   updateGifToggleLabel()
   if(!gifEnabled) hideGifPanel()
-  // Persist to Firebase — listenGifSuggestions() confirms/re-syncs it.
   set(ref(db, "gifSuggestions"), newVal ? "on" : "off").catch(()=>{})
 }
 
@@ -1180,15 +1239,10 @@ updateGifToggleLabel()
 // PROFILE PICS
 // ─────────────────────────────────────────────
 let profilePics = {}
-
 const DEFAULT_PIC = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMwNzVFNTQiLz48Y2lyY2xlIGN4PSIyMCIgY3k9IjE1IiByPSI3IiBmaWxscz0id2hpdGUiLz48Y2xsaXBzZSBjeD0iMjAiIGN5PSIzNCIgcng9IjEyIiByeT0iOCIgZmlsbD0id2hpdGUiLz48L3N2Zz4="
 
-function getAvatar(user){
-  return profilePics[user] || DEFAULT_PIC
-}
-
-// ✅ Expose to window so story.js (non-module) can access
-window.getAvatar  = getAvatar
+function getAvatar(user){ return profilePics[user] || DEFAULT_PIC }
+window.getAvatar = getAvatar
 window.DEFAULT_PIC = DEFAULT_PIC
 
 function updateHeader(){
@@ -1205,7 +1259,6 @@ function listenProfilePics(){
       const u = img.dataset.user
       if(u) img.src = getAvatar(u)
     })
-    // menu avatar instant sync
     const menuAv = document.getElementById('menuProfileAvatar')
     if(menuAv) menuAv.src = getAvatar(username)
     if(typeof window.refreshStoryBar === 'function') window.refreshStoryBar()
@@ -1229,9 +1282,7 @@ window.uploadProfilePic = async function(input){
     if(!data.url){ alert("Upload failed ⚠️"); return }
     const urlWithCache = data.url + "?t=" + Date.now()
     await set(ref(db, "profilePics/" + username), urlWithCache)
-  } catch(e){
-    alert("Profile pic upload failed ⚠️")
-  }
+  } catch(e){ alert("Profile pic upload failed ⚠️") }
 }
 
 // ─────────────────────────────────────────────
@@ -1243,8 +1294,6 @@ function getNick(user){
   if(!user) return ""
   return nicknames[user] || (user==="katis1" ? "Kat" : "Kitty")
 }
-
-// ✅ Expose getNick to window so story.js can access
 window.getNick = getNick
 
 function refreshAllDisplayNames(){
@@ -1255,11 +1304,9 @@ function refreshAllDisplayNames(){
   })
 }
 
-// ════════════════════════
-// DARK THEME — Firebase sync
-// Shared key: "theme" (no per-user path)
-// Both users see same theme instantly.
-// ════════════════════════
+// ─────────────────────────────────────────────
+// DARK THEME
+// ─────────────────────────────────────────────
 let _themeRef = null
 
 function listenTheme() {
@@ -1267,35 +1314,22 @@ function listenTheme() {
   onValue(_themeRef, snap => {
     const isDark = snap.val() === "dark"
     applyTheme(isDark)
-    // Sync menu checkbox label — update only the inner <span>, never
-    // the parent <div>, so the div's onclick binding and event target
-    // are never disturbed by this Firebase-driven re-render (this was
-    // the root cause of the click sometimes not registering).
     const label = document.getElementById("darkThemeLabel")
     if (label) label.textContent = (isDark ? "☑" : "☐") + " Dark Theme"
   })
 }
 
 function applyTheme(isDark) {
-  if (isDark) {
-    document.body.classList.add("dark-theme")
-  } else {
-    document.body.classList.remove("dark-theme")
-  }
+  if (isDark) document.body.classList.add("dark-theme")
+  else document.body.classList.remove("dark-theme")
 }
 
-// ✅ Narrow, read-only exposures for shorts.js (Phase 2) — matches the
-// same safe pattern already used for getAvatar/getNick/DEFAULT_PIC.
-// shorts.js runs as a separate, non-module script and cannot import
-// db/ref/onValue itself, so these two purpose-built listeners are
-// exposed instead of the raw Firebase primitives. Both are read-only
-// and change nothing about existing messaging/status behavior.
 window.listenOtherUserOnlineStatus = function(callback) {
   if (!otherUser) { callback(false); return }
   onValue(ref(db, "status/" + otherUser), snap => {
     const data = snap.val()
     if (!data) { callback(false); return }
-    callback((Date.now() - data.last) < 12000)   // same 12s threshold the header's own status text uses
+    callback((Date.now() - data.last) < 12000)
   })
 }
 
@@ -1313,30 +1347,13 @@ window.listenUnseenMessageCount = function(callback) {
 }
 
 window.toggleDarkTheme = function(e) {
-  // ✅ FIX: stop this click from bubbling anywhere else, and make sure
-  // it is fully processed before we do anything that could interrupt
-  // it (like closing the menu or letting a Firebase update re-render
-  // the label mid-click).
   if (e) e.stopPropagation()
-
   const isDark = document.body.classList.contains("dark-theme")
   const newTheme = isDark ? "light" : "dark"
-
-  // Apply locally immediately — instant feedback, doesn't wait on
-  // the Firebase round-trip so the toggle always feels responsive.
   applyTheme(!isDark)
   const label = document.getElementById("darkThemeLabel")
   if (label) label.textContent = (!isDark ? "☑" : "☐") + " Dark Theme"
-
-  // Save to Firebase — both users will get the confirmed update via
-  // listenTheme(); this also self-corrects if the write ever fails.
-  set(ref(db, "theme"), newTheme)
-    .then(() => console.log("[Theme] Saved to Firebase:", newTheme))
-    .catch(err => console.error("[Theme] Firebase write FAILED — check database rules for the 'theme' path:", err))
-
-  // Close the menu AFTER this click has been fully handled — using
-  // the shared animated helper so this behaves identically to every
-  // other menu item (Delete Chat, Upload Image, etc.).
+  set(ref(db, "theme"), newTheme).catch(()=>{})
   setTimeout(() => { closeMenuBox() }, 120)
 }
 
@@ -1345,7 +1362,6 @@ function listenNickNames(){
     const data = snap.val() || {}
     nicknames = data
     refreshAllDisplayNames()
-    // menu profile name instant update — nicknames load হলে
     const menuName = document.getElementById('menuProfileName')
     if(menuName && username) {
       const nick = getNick(username)
@@ -1363,9 +1379,7 @@ window.openNickModal = function(){
   document.getElementById("nickModal").style.display = "flex"
 }
 
-window.closeNickModal = function(){
-  document.getElementById("nickModal").style.display = "none"
-}
+window.closeNickModal = function(){ document.getElementById("nickModal").style.display = "none" }
 
 window.saveNickNames = async function(){
   const myNick = document.getElementById("myNickInput").value.trim()
@@ -1386,8 +1400,7 @@ function isBlocked(){ return iBlockedOther || otherBlockedMe }
 function formatBlockTime(ts){
   if(!ts) return ""
   const d = new Date(ts)
-  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) +
-    " at " + d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:true})
+  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + " at " + d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:true})
 }
 
 function updateBlockUI(){
@@ -1396,7 +1409,6 @@ function updateBlockUI(){
   msgBox.disabled = blocked
   sendBtn.disabled = blocked
   msgBox.placeholder = blocked ? "🚫 Messaging is blocked" : "Type message..."
-
   if(iBlockedOther){
     blockedBanner.style.display = "block"
     blockedBanner.innerHTML = `🚫 You blocked this person. <span style="color:#075E54;cursor:pointer;text-decoration:underline;" onclick="toggleBlock()">Tap to unblock.</span>`
@@ -1532,11 +1544,9 @@ function hideGifPanel() {
 }
 
 msgBox.addEventListener("blur", () => { hideGifPanel() })
-
 window.visualViewport?.addEventListener("resize", () => {
   if (document.activeElement !== msgBox) { hideGifPanel() }
 })
-
 document.addEventListener("touchstart", e => {
   if (!gifPanel.contains(e.target) && e.target !== msgBox) { hideGifPanel() }
 })
@@ -1544,7 +1554,6 @@ document.addEventListener("touchstart", e => {
 msgBox.addEventListener("input", function () {
   this.style.height = "auto"
   this.style.height = Math.min(this.scrollHeight, 120) + "px"
-  // WhatsApp-style: swap mic↔send instantly as user types
   const _hasText = this.value.length > 0
   const _mic = document.getElementById("micBtn")
   const _snd = document.getElementById("sendBtn")
@@ -1558,59 +1567,43 @@ msgBox.addEventListener("input", function () {
   }
 
   if (!gifEnabled) { hideGifPanel(); return }
-
   const val = this.value.trim()
   clearTimeout(gifDebounceTimer)
-
   if (!val) { hideGifPanel(); return }
   if (val.endsWith(".") || val.endsWith("?") || val.endsWith("!")) { hideGifPanel(); return }
   const sentenceCount = (val.match(/[.!?]/g) || []).length
   if (sentenceCount >= 1) { hideGifPanel(); return }
-
   gifDebounceTimer = setTimeout(() => { searchGifs(val) }, 350)
 })
 
 async function searchGifs(query) {
   if (!gifEnabled) { hideGifPanel(); return }
   if (query.split(" ").length > 4) { hideGifPanel(); return }
-
   gifPanel.style.display = "flex"
   try {
     const url = `https://api.klipy.com/api/v1/${GIF_API_KEY}/gifs/search?q=${encodeURIComponent(query)}&limit=30`
     const res = await fetch(url)
     const data = await res.json()
     let items = data?.data?.data || []
-
     const usedUrls = new Set()
     items = items.filter(item => {
       const url = item?.file?.md?.gif?.url || item?.file?.sm?.gif?.url || ""
       if (!url || usedUrls.has(url)) return false
       usedUrls.add(url); return true
     })
-
     items = items.sort(() => Math.random() - 0.5)
     if (!items.length || items.length < 2) { hideGifPanel(); return }
-
     gifPanel.innerHTML = ""
     items.forEach(item => {
       const gifUrl = item?.file?.md?.gif?.url || item?.file?.sm?.gif?.url || ""
       const previewUrl = item?.file?.sm?.gif?.url || item?.file?.md?.gif?.url || gifUrl
       if (!gifUrl) return
-
       const img = document.createElement("img")
       img.className = "gifItem"
       img.src = previewUrl
       img.loading = "lazy"
       img.alt = "GIF"
-      img.style.width = "72px"
-      img.style.height = "72px"
-      img.style.objectFit = "cover"
-      img.style.borderRadius = "10px"
-      img.style.margin = "4px"
-      img.style.cursor = "pointer"
-      img.style.flexShrink = "0"
-      img.style.transition = "0.2s"
-
+      img.style.cssText = "width:72px;height:72px;object-fit:cover;border-radius:10px;margin:4px;cursor:pointer;flex-shrink:0;transition:0.2s;"
       let touchMoved = false
       img.addEventListener("touchmove", () => { touchMoved = true }, { passive:true })
       img.addEventListener("touchstart", () => { touchMoved = false }, { passive:true })
@@ -1621,14 +1614,12 @@ async function searchGifs(query) {
         await push(ref(db, "messages"), { name:username, type:"gif", text:"__gif__"+gifUrl, time:Date.now(), seen:false })
         hideGifPanel(); msgBox.value = ""; msgBox.style.height = "auto"
       }, { passive:false })
-
       img.addEventListener("click", async (e) => {
         e.preventDefault(); e.stopPropagation()
         if (isBlocked()) return
         await push(ref(db, "messages"), { name:username, type:"gif", text:"__gif__"+gifUrl, time:Date.now(), seen:false })
         hideGifPanel(); msgBox.value = ""; msgBox.style.height = "auto"
       })
-
       gifPanel.appendChild(img)
     })
   } catch (e) { console.error(e); hideGifPanel() }
@@ -1839,43 +1830,34 @@ window.start=async function(){
   onDisconnect(userRef).set({online:false,last:Date.now()})
   onDisconnect(ref(db,"typing/"+username)).set(false)
 
-  console.log("[AUTH] STATE CHANGED — user:", username)
-
+  let hiddenTimestamp = 0;
   document.addEventListener("visibilitychange",()=>{
     if(document.hidden){
-      console.log("[BROWSER] visibility = hidden")
-      set(userRef,{online:false,last:Date.now()})
+      console.log("[Chat] Background");
+      hiddenTimestamp = Date.now();
+      set(userRef,{online:false,last:Date.now()});
     } else {
-      console.log("[BROWSER] visibility = visible")
-      set(userRef,{online:true,last:Date.now()})
-      if(chatListenerAttached){
-        setTimeout(()=>syncMessages("visibilitychange"), 400)
+      console.log("[Chat] Foreground Sync");
+      const hiddenDuration = Date.now() - hiddenTimestamp;
+      set(userRef,{online:true,last:Date.now()});
+      
+      if (hiddenDuration > 1000) {
+        console.log("[Chat] Forcing reconnect due to >1s backgrounding");
+        goOffline(db);
+        goOnline(db);
       }
+      
+      setTimeout(()=>syncMessages("visibilitychange"), 800);
     }
-  })
+  });
 
   window.addEventListener("focus",()=>{
-    console.log("[BROWSER] focus")
-    if(chatListenerAttached && username){
-      setTimeout(()=>syncMessages("focus"), 300)
-    }
-  })
-
-  window.addEventListener("pageshow",(e)=>{
-    if(e.persisted){
-      console.log("[BROWSER] pageshow (restored from bfcache)")
-      if(chatListenerAttached && username){
-        setTimeout(()=>syncMessages("pageshow"), 500)
-      }
-    }
-  })
+    setTimeout(()=>syncMessages("focus"), 300);
+  });
 
   window.addEventListener("online",()=>{
-    console.log("[BROWSER] online")
-    if(chatListenerAttached && username){
-      setTimeout(()=>syncMessages("online"), 500)
-    }
-  })
+    setTimeout(()=>syncMessages("online"), 500);
+  });
 
   setInterval(()=>set(userRef,{online:true,last:Date.now()}),10000)
 
@@ -1893,18 +1875,8 @@ window.start=async function(){
   listenTheme()
   listenGifSuggestions()
 
-  // ✅ LOGIN SUCCESS — story bar দেখাও
-  if(typeof showStoryBar === "function") {
-    showStoryBar()
-  }
-
-  // ✅ LOGIN SUCCESS — Shorts Feed default landing screen
-  // (chat above is already fully initialized as before — this just
-  // shows Shorts on top of it; tapping Message/Profile in Shorts
-  // hides it to reveal the already-running chat underneath)
-  if(typeof showShortsFeed === "function") {
-    showShortsFeed()
-  }
+  if(typeof showStoryBar === "function") showStoryBar()
+  if(typeof showShortsFeed === "function") showShortsFeed()
 }
 
 // ─────────────────────────────────────────────
@@ -1917,11 +1889,9 @@ window.send=async function(){
 
   if(editingKey){
     await update(ref(db,"messages/"+editingKey),{text:text,edited:true})
-    console.log("[CHAT] MESSAGE WRITE SUCCESS (edit)")
     editingKey=null; editBar.style.display="none"
     sendBtn.innerText="➤"
     msgBox.value=""; msgBox.style.height="auto"
-    // Reset: show mic, hide send
     const _micE=document.getElementById("micBtn"); if(_micE)_micE.style.display="flex"
     sendBtn.style.display="none"
     return
@@ -1938,14 +1908,11 @@ window.send=async function(){
     replyingTo=null; replyBar.style.display="none"
   }
 
-  push(ref(db,"messages"),msgData)
-    .then(()=>{ console.log("[CHAT] MESSAGE WRITE SUCCESS") })
-    .catch(e=>{ console.error("[CHAT] MESSAGE WRITE FAILED:", e) })
+  push(ref(db,"messages"),msgData).catch(e=>console.error("[Chat] Send failed:",e))
   msgBox.value=""; msgBox.style.height="auto"
   gifPanel.style.display="none"
   set(ref(db,"typing/"+username),false)
   clearTimeout(typingTimeout)
-  // Reset: show mic, hide send
   const _mic=document.getElementById("micBtn"); if(_mic)_mic.style.display="flex"
   sendBtn.style.display="none"
 }
@@ -2000,8 +1967,7 @@ function buildTimeHtml(message,isMe){
 
 function createMessage(message,key){
   if(key && document.getElementById(key)){
-    console.log("[CHAT] MESSAGE EVENT RECEIVED — skipped duplicate key: " + key)
-    return
+    return; // Duplicate guard
   }
   if(message.type==="system"){
     const div=document.createElement("div")
@@ -2097,55 +2063,6 @@ function createMessage(message,key){
   scrollToBottom()
 }
 
-console.log("[CHAT] listener ATTACHED")
-chatListenerAttached = true
-
-onChildAdded(ref(db,"messages"),data=>{
-  const message=data.val()
-  console.log("[CHAT] MESSAGE EVENT RECEIVED (key: " + data.key + ")")
-  createMessage(message,data.key)
-  if(message.time>appStartTime&&message.name==="kittyis0001"&&!message.type){
-    const now=new Date()
-    const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
-    fetch(BACKEND+"/notify",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({text:message.text.startsWith("__voice__")?"🎤 Voice message":message.text.startsWith("__gif__")?"🎞️ GIF":message.text,time})
-    }).catch(()=>{})
-  }
-})
-
-onChildChanged(ref(db,"messages"),data=>{
-  const me=localStorage.getItem("chatUser")||username
-  const message=data.val()
-  const key=data.key
-  const row=document.getElementById(key)
-  if(!row) return
-  if(message.type) return
-
-  const msgDiv=row.querySelector(".msg")
-  if(!msgDiv) return
-
-  if(message.deleted){
-    msgDiv.innerHTML=`<span style="color:#aaa;font-style:italic;font-size:13px;">🚫 Message deleted</span><div class="time">${buildTimeHtml(message,message.name==me)}</div>`
-    return
-  }
-
-  const timeDiv=msgDiv.querySelector(".time")
-  if(timeDiv) timeDiv.innerHTML=buildTimeHtml(message,message.name==me)
-
-  if(message.edited){
-    const textSpan=msgDiv.querySelector(".msgText")
-    if(textSpan){
-      textSpan.innerHTML=message.text.replace(/\n/g,"<br>").replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" style="color:#075E54;word-break:break-all;" onclick="event.stopPropagation()">$1</a>')
-    }
-  }
-
-  const reactionBar=msgDiv.querySelector(".reactionBar")
-  const newReactionHtml=renderReactions(message.reactions,key)
-  if(reactionBar) reactionBar.outerHTML=newReactionHtml||""
-  else if(newReactionHtml) msgDiv.insertAdjacentHTML("beforeend",newReactionHtml)
-})
-
 function markSeenMessages(){
   if(seenListener) return
   seenListener=onValue(ref(db,"messages"),snap=>{
@@ -2183,22 +2100,14 @@ onValue(ref(db,"status"),snap=>{
   }
 })
 
-// ✅ Global helper — opens the menu with the slide+fade animation.
 window.openMenuBox = function(){
   const m=document.getElementById("menuBox")
   if(!m) return
   m.style.display="block"
-  // Force a reflow so the browser registers the "closed" starting
-  // state before we add "menu-open" — otherwise it would jump
-  // straight to the open state with no animation.
   void m.offsetWidth
   m.classList.add("menu-open")
 }
 
-// ✅ Global helper — plays the reverse animation, THEN hides the menu.
-// Every existing "menuBox...display = 'none'" call site now routes
-// through this so all of them get the same closing animation without
-// having to touch each call site's surrounding logic individually.
 window.closeMenuBox = function(){
   const m=document.getElementById("menuBox")
   if(!m) return
@@ -2222,10 +2131,8 @@ window.triggerImageUpload = function(){
 
 window.deleteAll=function(){
   if(confirm("Delete all chat?")){
-    isSyncing = true   // block any in-flight sync from re-adding messages
-    remove(ref(db,"messages"))
-      .then(()=>{ console.log("[CHAT] deleteAll — messages removed from Firebase") })
-      .catch(e=>{ console.error("[CHAT] deleteAll FAILED:", e) })
+    isSyncing = true
+    remove(ref(db,"messages")).catch(e=>console.error("[Chat] deleteAll FAILED:", e))
     messagesEl.innerHTML=""
     isSyncing = false
     closeMenuBox()
