@@ -1,1 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>404 — Site Closed</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,wght@0,300;0,400;1,400;1,500&family=Inter:wght@300;400;500&display=swap');
+
+  :root{
+    --bg: #0a0a0c;
+    --bg-soft: #101013;
+    --text: #d8d5d0;
+    --text-dim: #6b6b70;
+    --accent: #9ca8b5;
+    --line-flat: #4a5158;
+    --letter-bg: #0d0c0e;
+    --letter-accent: #8b6a6a;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ===== VIEW 1: 404 CLOSED ===== */
+  #view-404{
+    min-height: 100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding: 24px;
+    transition: opacity 0.6s ease, filter 0.6s ease;
+  }
+
+  .status-code{
+    font-family:'JetBrains Mono', monospace;
+    font-size: clamp(4rem, 14vw, 7rem);
+    font-weight: 700;
+    letter-spacing: -2px;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .status-sub{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-top: 14px;
+  }
+
+  .flatline-wrap{
+    width: min(420px, 80vw);
+    height: 60px;
+    margin: 42px 0 30px 0;
+  }
+
+  .flatline-wrap svg{ width:100%; height:100%; overflow: visible; }
+
+  .flatline-path{
+    fill:none;
+    stroke: var(--line-flat);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-dasharray: 600;
+    stroke-dashoffset: 600;
+    animation: draw-line 3.2s ease-out forwards;
+  }
+
+  @keyframes draw-line{
+    to{ stroke-dashoffset: 0; }
+  }
+
+  .status-msg{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    max-width: 360px;
+    line-height: 1.7;
+    margin-bottom: 46px;
+  }
+
+  .status-msg span{ color: var(--text); }
+
+  .cta-btn{
+    position: relative;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    color: var(--bg);
+    background: var(--accent);
+    border: none;
+    padding: 16px 34px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+    box-shadow: 0 0 0 0 rgba(156,168,181,0.0);
+  }
+
+  .cta-btn:hover{
+    background: #b6c0cb;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(156,168,181,0.15);
+  }
+
+  .cta-btn:focus-visible{
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+  }
+
+  .cta-btn::after{
+    content: '';
+  }
+
+  .cta-note{
+    margin-top: 18px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .fade-out{
+    opacity: 0;
+    filter: blur(6px);
+    pointer-events: none;
+  }
+
+  /* ===== VIEW 2: LETTER ===== */
+  #view-letter{
+    display:none;
+    min-height: 100vh;
+    background: var(--letter-bg);
+    align-items:center;
+    justify-content:center;
+    padding: 8vh 24px;
+    opacity: 0;
+    transition: opacity 0.9s ease;
+  }
+
+  #view-letter.show{
+    display:flex;
+    opacity: 1;
+  }
+
+  .letter{
+    max-width: 620px;
+    width: 100%;
+  }
+
+  .letter-eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--letter-accent);
+    margin-bottom: 28px;
+    opacity: 0;
+    animation: rise 0.8s ease forwards 0.2s;
+  }
+
+  .letter-rule{
+    width: 40px;
+    height: 1px;
+    background: var(--letter-accent);
+    margin-bottom: 40px;
+    opacity: 0;
+    animation: rise 0.8s ease forwards 0.35s;
+  }
+
+  .letter-body p{
+    font-family: 'Newsreader', serif;
+    font-weight: 300;
+    font-size: clamp(1.15rem, 2.4vw, 1.4rem);
+    line-height: 1.85;
+    color: var(--text);
+    margin-bottom: 30px;
+    opacity: 0;
+    animation: rise 1s ease forwards;
+  }
+
+  .letter-body p:nth-child(1){ animation-delay: 0.5s; }
+  .letter-body p:nth-child(2){ animation-delay: 0.75s; }
+  .letter-body p:nth-child(3){ animation-delay: 1.0s; }
+  .letter-body p:nth-child(4){ animation-delay: 1.25s; }
+
+  .letter-sign{
+    font-family:'Newsreader', serif;
+    font-style: italic;
+    font-size: 1.2rem;
+    color: var(--letter-accent);
+    margin-top: 20px;
+    opacity: 0;
+    animation: rise 1s ease forwards 1.55s;
+  }
+
+  @keyframes rise{
+    from{ opacity:0; transform: translateY(14px); }
+    to{ opacity:1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .flatline-path{ animation:none; stroke-dashoffset:0; }
+    .letter-eyebrow, .letter-rule, .letter-body p, .letter-sign{
+      animation:none; opacity:1; transform:none;
+    }
+  }
+</style>
+</head>
+<body>
+
+<section id="view-404">
+  <div class="status-code">404</div>
+  <div class="status-sub">This site is permanently closed</div>
+
+  <div class="flatline-wrap">
+    <svg viewBox="0 0 400 60" preserveAspectRatio="none">
+      <path class="flatline-path" d="M0,30 L140,30 L155,30 L165,6 L178,54 L190,16 L200,30 L400,30" />
+    </svg>
+  </div>
+
+  <p class="status-msg">No new content will be published here.<br><span>But one message was left before it closed.</span></p>
+
+  <button class="cta-btn" id="revealBtn">click here to see my last message</button>
+  <div class="cta-note">— last updated once, never again —</div>
+</section>
+
+<section id="view-letter">
+  <div class="letter">
+    <div class="letter-eyebrow">final message</div>
+    <div class="letter-rule"></div>
+    <div class="letter-body">
+      <p>I've thought about this carefully, and I don't think we can stay together anymore.</p>
+      <p>This relationship has become mentally exhausting for me. I gave it my time, my care, and my best, but we keep hurting each other and repeating the same fights.</p>
+      <p>I'm not leaving because I don't love you. I'm leaving because we've reached a point where we're no longer bringing peace into each other's lives. I don't want us to keep disrespecting or hurting each other.</p>
+      <p>I truly wish you happiness and the best in your life. Please respect my decision.</p>
+    </div>
+    <div class="letter-sign">Goodbye.</div>
+  </div>
+</section>
+
+<script>
+  const btn = document.getElementById('revealBtn');
+  const view404 = document.getElementById('view-404');
+  const viewLetter = document.getElementById('view-letter');
+
+  btn.addEventListener('click', () => {
+    view404.classList.add('fade-out');
+    setTimeout(() => {
+      view404.style.display = 'none';
+      viewLetter.classList.add('show');
+    }, 550);
+  });
+</script>
+
+</body>
+  </html>
 
