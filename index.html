@@ -2373,45 +2373,57 @@ window.start=async function(){
 // ─────────────────────────────────────────────
 // SEND
 // ─────────────────────────────────────────────
-window.send=async function(){
-  if(isBlocked()) return
-  const text=msgBox.value.trim()
-  if(!text) return
+window.send = async function() {
+  if(isBlocked()) return;
+  const text = msgBox.value.trim();
+  if(!text) return;
 
-  if(editingKey){
-    await update(ref(db,"messages/"+editingKey),{text:text,edited:true})
-    editingKey=null; editBar.style.display="none"
-    sendBtn.innerText="➤"
-    msgBox.value=""; msgBox.style.height="auto"
-    const _micE=document.getElementById("micBtn"); if(_micE)_micE.style.display="flex"
-    const _camE=document.getElementById("cameraBtn"); if(_camE)_camE.style.display="flex"
-    sendBtn.style.display="none"
-    return
+  if(editingKey) {
+    await update(ref(db, "messages/" + editingKey), { text: text, edited: true });
+    editingKey = null;
+    editBar.style.display = "none";
+    sendBtn.innerText = "➤";
+    msgBox.value = "";
+    msgBox.style.height = "auto";
+    const _micE = document.getElementById("micBtn"); if(_micE) _micE.style.display = "flex";
+    const _camE = document.getElementById("cameraBtn"); if(_camE) _camE.style.display = "flex";
+    sendBtn.style.display = "none";
+    return;
   }
 
-  const msgData={name:username,text:text,time:Date.now(),seen:false}
+  const msgData = {
+    name: username,
+    text: text,
+    time: Date.now(),
+    seen: false
+  };
 
-  if(replyingTo){
-    msgData.replyTo={
+  if(replyingTo) {
+    msgData.replyTo = {
       key: replyingTo.key,
       name: replyingTo.name,
       text: replyingTo.text,
       type: replyingTo.type,
       thumb: replyingTo.thumb,
       duration: replyingTo.duration
-    }
-    replyingTo=null; replyBar.style.display="none"
+    };
   }
 
-  push(ref(db,"messages"),msgData)
-  msgBox.value=""; msgBox.style.height="auto"
-  gifPanel.style.display="none"
-  set(ref(db,"typing/"+username),false)
-  clearTimeout(typingTimeout)
-  const _mic=document.getElementById("micBtn"); if(_mic)_mic.style.display="flex"
-  const _cam=document.getElementById("cameraBtn"); if(_cam)_cam.style.display="flex"
-  sendBtn.style.display="none"
-}
+  push(ref(db, "messages"), msgData).then(() => {
+    // Clear reply preview bar AFTER successful save
+    replyingTo = null;
+    replyBar.style.display = "none";
+  });
+
+  msgBox.value = "";
+  msgBox.style.height = "auto";
+  gifPanel.style.display = "none";
+  set(ref(db, "typing/" + username), false);
+  clearTimeout(typingTimeout);
+  const _mic = document.getElementById("micBtn"); if(_mic) _mic.style.display = "flex";
+  const _cam = document.getElementById("cameraBtn"); if(_cam) _cam.style.display = "flex";
+  sendBtn.style.display = "none";
+};
 
 function scrollToBottom(){
   setTimeout(()=>{ messagesEl.scrollTop = messagesEl.scrollHeight }, 50)
