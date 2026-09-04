@@ -318,7 +318,7 @@ max-width:65%;
 border-radius:18px;
 word-wrap:break-word;
 position:relative;
-transition:transform 0.2s ease;
+transition:transform 0.2s ease, background 0.3s ease;
 box-shadow:0 2px 10px rgba(140,100,200,0.15);
 }
 
@@ -340,20 +340,48 @@ border-bottom-left-radius: 5px;
 }
 
 .replyQuote{
-background:rgba(0,0,0,0.07);
-border-left:3px solid rgba(140,100,220,0.5);
-border-radius:4px;
-padding:5px 8px;
-margin-bottom:6px;
-font-size:12px;
-color:#5a4a8a;
-max-width:100%;
-overflow:hidden;
-white-space:nowrap;
-text-overflow:ellipsis;
+display: flex;
+gap: 8px;
+align-items: center;
+background: rgba(0,0,0,0.08);
+border-left: 3px solid #8060cc;
+border-radius: 6px;
+padding: 6px 8px;
+margin-bottom: 6px;
+cursor: pointer;
+max-width: 100%;
+overflow: hidden;
+}
+.me .msg .replyQuote { background: rgba(255,255,255,0.2); border-left-color: white; }
+
+.replyQuoteThumb {
+width: 36px; height: 36px;
+border-radius: 4px;
+flex-shrink: 0;
+position: relative;
+overflow: hidden;
+background: rgba(0,0,0,0.1);
+}
+.replyQuoteThumb img { width: 100%; height: 100%; object-fit: cover; }
+.replyQuotePlayIcon {
+position: absolute; top: 50%; left: 50%;
+transform: translate(-50%, -50%);
+width: 18px; height: 18px;
+background: rgba(0,0,0,0.5);
+border-radius: 50%;
+display: flex; align-items: center; justify-content: center;
 }
 
-.replyQuote .replyName{ font-weight:bold; color:#075E54; font-size:11px; margin-bottom:2px; }
+.replyQuoteContent {
+flex: 1;
+overflow: hidden;
+white-space: nowrap;
+text-overflow: ellipsis;
+}
+.replyQuoteContent .replyName { font-weight:bold; color:#075E54; font-size:12px; margin-bottom:2px; }
+.me .msg .replyQuoteContent .replyName { color: white; }
+.replyQuoteContent .replyText { font-size: 13px; opacity: 0.85; }
+
 .editedLabel{ font-size:10px; color:rgba(100,80,160,0.5); margin-left:4px; }
 .time{ font-size:11px; color:rgba(100,80,160,0.55); margin-top:3px; text-align:right; }
 .reactionBar{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
@@ -418,8 +446,10 @@ align-items:center;
 gap:8px;
 }
 
-#replyBar .replyBarContent{ flex:1; font-size:12px; color:#5a4a8a; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#replyBar .replyBarContent{ flex:1; display:flex; gap:8px; align-items:center; overflow:hidden; }
 #replyBar .replyBarName{ font-weight:bold; color:#8060cc; font-size:11px; }
+#replyBar .replyBarText{ font-size:12px; color:#5a4a8a; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#replyBar .replyQuoteThumb { width: 32px; height: 32px; }
 #replyBarClose{ background:none; border:none; font-size:20px; cursor:pointer; color:#9a8aba; padding:0; }
 
 #editBar{
@@ -1055,7 +1085,7 @@ body.dark-theme .mediaSheetItem span { color: #e9edef; }
   top: 0; left: 0;
   width: 100%; height: 100%;
   background: #000;
-  z-index: 9999;
+  z-index: 10001;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -1084,6 +1114,38 @@ body.dark-theme .mediaSheetItem span { color: #e9edef; }
   transition: background 0.15s;
 }
 #videoCloseBtn:active { background: rgba(255,255,255,0.3); }
+
+
+/* ── Premium Image Zoom Viewer ── */
+#imgViewer {
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  transition: opacity 0.25s, background 0.25s;
+}
+#imgViewer.hidden { opacity: 0; pointer-events: none; }
+#imgCloseBtn {
+  position: absolute;
+  top: 16px; right: 16px;
+  width: 40px; height: 40px;
+  background: rgba(255,255,255,0.2);
+  border: none; border-radius: 50%;
+  color: white; font-size: 20px; cursor: pointer; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+}
+#fullImg {
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* Highlight effect for scrolled-to messages */
+@keyframes highlightMsg {
+  0% { background-color: rgba(255, 235, 59, 0.4); }
+  100% { background-color: transparent; }
+}
+.msg.highlighted {
+  animation: highlightMsg 1.5s ease;
+}
 
 </style>
 <link rel="stylesheet" href="story.css">
@@ -1124,8 +1186,7 @@ body.dark-theme .mediaSheetItem span { color: #e9edef; }
 </div>
 
 <div id="menuBox">
-  <div onclick="triggerImageUpload()">🖼️ Upload Image</div>
-
+  <!-- Upload Image Option Removed Here -->
   <div onclick="openNickModal()">✏️ Change Nick Name</div>
   <div onclick="changeProfilePic()">🖼️ Change Profile Pic</div>
   <div id="gifToggleItem" onclick="toggleGifSuggestions()">☑️ GIF Suggestions</div>
@@ -1153,10 +1214,7 @@ body.dark-theme .mediaSheetItem span { color: #e9edef; }
 </div>
 
 <div id="replyBar">
-  <div class="replyBarContent">
-    <div class="replyBarName" id="replyBarName"></div>
-    <div id="replyBarText"></div>
-  </div>
+  <div class="replyBarContent" id="replyBarContent"></div>
   <button id="replyBarClose">✕</button>
 </div>
 
@@ -2046,23 +2104,55 @@ msgBox.addEventListener("keydown", function (e) {
 // ─────────────────────────────────────────────
 let replyingTo = null
 const replyBar = document.getElementById("replyBar")
-const replyBarName = document.getElementById("replyBarName")
-const replyBarText = document.getElementById("replyBarText")
+const replyBarContent = document.getElementById("replyBarContent")
 const replyBarClose = document.getElementById("replyBarClose")
 
 replyBarClose.addEventListener("click",()=>{ replyingTo=null; replyBar.style.display="none" })
 
-function startReply(key, name, text, type){
-  replyingTo={key,name,text,type}
-  replyBarName.innerText = getNick(name)
-  let preview = text.substring(0,60)
-  if(text.startsWith("__voice__")) preview = "🎤 Voice message"
-  else if(text.startsWith("__gif__")) preview = "🎞️ GIF"
-  else if(type === "image") preview = "📷 Photo"
-  else if(type === "video") preview = "🎥 Video"
-  replyBarText.innerText = preview
-  replyBar.style.display="flex"
-  msgBox.focus()
+window.scrollToMsg = function(key) {
+  const el = document.getElementById(key);
+  if(el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.querySelector('.msg').classList.add('highlighted');
+    setTimeout(() => el.querySelector('.msg').classList.remove('highlighted'), 1500);
+  }
+}
+
+function startReply(key, name, text, type, duration){
+  let thumb = null;
+  let previewText = text.substring(0,60);
+  
+  if (text === "__deleted__") {
+    previewText = "🚫 Message deleted";
+  } else if (text.startsWith("__voice__")) {
+    previewText = "🎤 Voice message";
+  } else if (text.startsWith("__gif__")) {
+    previewText = "🎞️ GIF";
+    thumb = text.replace("__gif__", "");
+  } else if (type === "image") {
+    previewText = "Photo";
+    thumb = text;
+  } else if (type === "video") {
+    previewText = "Video";
+    thumb = getVideoThumbnail(text);
+  } else if (isImageUrl(text)) {
+    thumb = text;
+  }
+
+  replyingTo = { key, name, text: previewText, type, thumb, duration };
+
+  let thumbHtml = "";
+  if (thumb) {
+    thumbHtml = `<div class="replyQuoteThumb"><img src="${thumb}">`;
+    if (type === "video") {
+      thumbHtml += `<div class="replyQuotePlayIcon"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M8 5v14l11-7z"/></svg></div>`;
+    }
+    thumbHtml += `</div>`;
+  }
+
+  replyBarContent.innerHTML = `${thumbHtml}<div style="overflow:hidden;"><div class="replyBarName">${getNick(name)}</div><div class="replyBarText">${previewText}</div></div>`;
+  replyBar.style.display = "flex";
+  msgBox.focus();
 }
 
 function addSwipeReply(div, key, message){
@@ -2075,7 +2165,7 @@ function addSwipeReply(div, key, message){
   div.addEventListener("touchend",e=>{
     const dx=e.changedTouches[0].clientX-startX
     div.style.transform=""
-    if(Math.abs(dx)>50&&moved) startReply(key,message.name,message.text,message.type)
+    if(Math.abs(dx)>50&&moved) startReply(key,message.name,message.text,message.type,message.duration)
   },{passive:true})
 }
 
@@ -2155,7 +2245,7 @@ document.getElementById("actionReply").addEventListener("click",e=>{
   e.stopPropagation()
   if(!currentMsgData) return
   actionMenu.style.display="none"
-  startReply(currentMsgKey,currentMsgData.name,currentMsgData.text,currentMsgData.type)
+  startReply(currentMsgKey,currentMsgData.name,currentMsgData.text,currentMsgData.type,currentMsgData.duration)
 })
 
 document.getElementById("actionEdit").addEventListener("click",e=>{
@@ -2302,16 +2392,13 @@ window.send=async function(){
   const msgData={name:username,text:text,time:Date.now(),seen:false}
 
   if(replyingTo){
-    let replyPreview = replyingTo.text.substring(0,80)
-    if(replyingTo.text.startsWith("__voice__")) replyPreview = "🎤 Voice message"
-    else if(replyingTo.text.startsWith("__gif__")) replyPreview = "🎞️ GIF"
-    else if(replyingTo.type === "image") replyPreview = "📷 Photo"
-    else if(replyingTo.type === "video") replyPreview = "🎥 Video"
-
     msgData.replyTo={
-      key:replyingTo.key,
-      name:replyingTo.name,
-      text:replyPreview
+      key: replyingTo.key,
+      name: replyingTo.name,
+      text: replyingTo.text,
+      type: replyingTo.type,
+      thumb: replyingTo.thumb,
+      duration: replyingTo.duration
     }
     replyingTo=null; replyBar.style.display="none"
   }
@@ -2424,7 +2511,21 @@ function createMessage(message,key){
   let replyHtml=""
   if(message.replyTo){
     const rName=getNick(message.replyTo.name)
-    replyHtml=`<div class="replyQuote"><div class="replyName">${rName}</div>${message.replyTo.text||""}</div>`
+    let thumbHtml = ""
+    if(message.replyTo.thumb){
+      thumbHtml = `<div class="replyQuoteThumb"><img src="${message.replyTo.thumb}">`
+      if(message.replyTo.type === "video"){
+        thumbHtml += `<div class="replyQuotePlayIcon"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M8 5v14l11-7z"/></svg></div>`
+      }
+      thumbHtml += `</div>`
+    }
+    replyHtml=`<div class="replyQuote" onclick="event.stopPropagation(); scrollToMsg('${message.replyTo.key}')">
+      ${thumbHtml}
+      <div class="replyQuoteContent">
+        <div class="replyName">${rName}</div>
+        <div class="replyText">${message.replyTo.text || ""}</div>
+      </div>
+    </div>`
   }
 
   // Add mediaBubble class for image/video messages
@@ -2645,111 +2746,123 @@ window.deleteAll=function(){
 }
 
 // ═══════════════════════════════════════════════════════
-// IMAGE VIEWER — Enhanced with pinch zoom, double-tap zoom, swipe down to close
+// PREMIUM IMAGE ZOOM VIEWER
+// Pinch zoom, pan, double-tap, swipe down to close
 // ═══════════════════════════════════════════════════════
 const imgViewer=document.getElementById("imgViewer")
 const fullImg=document.getElementById("fullImg")
-let imgScale=1,touchStartDist=0,touchStartScale=1
-let imgSwipeStartY=0, imgSwipeCurrentY=0, imgIsSwiping=false
-let imgLastTapTime=0
+let imgScale=1, imgLastTapTime=0, imgPanX=0, imgPanY=0
+let imgStartX=0, imgStartY=0, imgStartDist=0, imgStartScale=1
+let imgSwipeStartY=0, imgIsSwiping=false
 
 function closeImageViewer(){
-  imgViewer.style.display="none"
-  imgScale=1
-  fullImg.style.transform="scale(1)"
-  fullImg.style.transition="transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)"
-  fullImg.style.cursor="zoom-in"
-  imgViewer.style.background="rgba(0,0,0,0.95)"
-  fullImg.src=""
+  imgViewer.classList.add("hidden")
+  setTimeout(() => {
+    imgViewer.style.display = "none"
+    imgScale = 1; imgPanX = 0; imgPanY = 0
+    fullImg.style.transform = "translate(0px, 0px) scale(1)"
+    fullImg.src = ""
+  }, 250)
 }
 
-// Pinch zoom + swipe down detection
-imgViewer.addEventListener("touchstart",e=>{
-  if(e.touches.length===2){
-    touchStartDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)
-    touchStartScale=imgScale
-  } else if(e.touches.length===1 && imgScale===1){
-    imgSwipeStartY=e.touches[0].clientY
-    imgIsSwiping=false
-  }
-},{passive:true})
+document.getElementById("imgCloseBtn").addEventListener("click", closeImageViewer)
 
-imgViewer.addEventListener("touchmove",e=>{
+imgViewer.addEventListener("touchstart", e=>{
+  if(e.touches.length===2){
+    imgStartDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY)
+    imgStartScale=imgScale
+    imgIsSwiping = false // stop swipe down if pinching
+  } else if(e.touches.length===1){
+    if(imgScale === 1){
+      imgSwipeStartY = e.touches[0].clientY
+      imgIsSwiping = false
+    } else {
+      imgStartX = e.touches[0].clientX - imgPanX
+      imgStartY = e.touches[0].clientY - imgPanY
+    }
+  }
+}, {passive:true})
+
+imgViewer.addEventListener("touchmove", e=>{
   if(e.touches.length===2){
     e.preventDefault()
-    const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)
-    imgScale=Math.min(Math.max(touchStartScale*(dist/touchStartDist),1),4)
-    fullImg.style.transition="none"
-    fullImg.style.transform="scale("+imgScale+")"
-  } else if(e.touches.length===1 && imgScale===1 && imgSwipeStartY){
-    imgSwipeCurrentY=e.touches[0].clientY
-    const dy=imgSwipeCurrentY-imgSwipeStartY
-    if(dy>0){
-      imgIsSwiping=true
-      fullImg.style.transition="none"
-      fullImg.style.transform="translateY("+dy+"px)"
-      imgViewer.style.background="rgba(0,0,0,"+Math.max(0.3,0.95-dy/500)+")"
+    const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY)
+    imgScale=Math.min(Math.max(imgStartScale*(dist/imgStartDist), 1), 4)
+    fullImg.style.transition = "none"
+    fullImg.style.transform = `translate(${imgPanX}px, ${imgPanY}px) scale(${imgScale})`
+  } else if(e.touches.length===1 && imgScale === 1 && imgSwipeStartY){
+    const dy = e.touches[0].clientY - imgSwipeStartY
+    if(dy > 0){
+      e.preventDefault()
+      imgIsSwiping = true
+      fullImg.style.transition = "none"
+      fullImg.style.transform = `translate(0px, ${dy}px) scale(1)`
+      imgViewer.style.background = `rgba(0,0,0,${Math.max(0.3, 0.85 - dy/400)})`
     }
+  } else if(e.touches.length===1 && imgScale > 1){
+    e.preventDefault()
+    imgPanX = e.touches[0].clientX - imgStartX
+    imgPanY = e.touches[0].clientY - imgStartY
+    fullImg.style.transition = "none"
+    fullImg.style.transform = `translate(${imgPanX}px, ${imgPanY}px) scale(${imgScale})`
   }
-},{passive:false})
+}, {passive:false})
 
-imgViewer.addEventListener("touchend",e=>{
+imgViewer.addEventListener("touchend", e=>{
   if(imgIsSwiping){
-    const dy=imgSwipeCurrentY-imgSwipeStartY
-    if(dy>100){
-      closeImageViewer()
-    } else {
-      fullImg.style.transition="transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)"
-      fullImg.style.transform="scale(1)"
-      imgViewer.style.background="rgba(0,0,0,0.95)"
+    const dy = e.changedTouches[0].clientY - imgSwipeStartY
+    if(dy > 100) closeImageViewer()
+    else {
+      fullImg.style.transition = "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)"
+      fullImg.style.transform = "translate(0px, 0px) scale(1)"
+      imgViewer.style.background = "rgba(0,0,0,0.85)"
     }
-    imgIsSwiping=false
-    imgSwipeStartY=0
-    imgSwipeCurrentY=0
+    imgIsSwiping = false
+    imgSwipeStartY = 0
     return
   }
 
-  // Double-tap zoom
-  if(e.changedTouches.length===1){
-    const now=Date.now()
-    if(now-imgLastTapTime<300){
-      imgScale = imgScale===1 ? 2.5 : 1
-      fullImg.style.transition="transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)"
-      fullImg.style.transform="scale("+imgScale+")"
-      fullImg.style.cursor=imgScale===1?"zoom-in":"zoom-out"
-      imgLastTapTime=0
+  if(e.changedTouches.length === 1){
+    const now = Date.now()
+    if(now - imgLastTapTime < 300){
+      imgScale = imgScale === 1 ? 2.5 : 1
+      imgPanX = 0; imgPanY = 0
+      fullImg.style.transition = "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)"
+      fullImg.style.transform = `translate(0px, 0px) scale(${imgScale})`
+      imgLastTapTime = 0
     } else {
-      imgLastTapTime=now
+      imgLastTapTime = now
     }
   }
 })
 
-// Background click to close
-imgViewer.addEventListener("click",e=>{
-  if(e.target.id==="imgViewer"){ closeImageViewer() }
+imgViewer.addEventListener("click", e=>{
+  if(e.target.id === "imgViewer" && imgScale === 1){ closeImageViewer() }
 })
 
-// Stop propagation on image so background click doesn't fire
-fullImg.addEventListener("click",e=>{
+fullImg.addEventListener("click", e=>{
   e.stopPropagation()
-})
-
-// Desktop double-click zoom
-fullImg.addEventListener("dblclick",e=>{
-  e.stopPropagation()
-  imgScale = imgScale===1 ? 2.5 : 1
-  fullImg.style.transition="transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)"
-  fullImg.style.transform="scale("+imgScale+")"
-  fullImg.style.cursor=imgScale===1?"zoom-in":"zoom-out"
+  const now = Date.now()
+  if(now - imgLastTapTime < 300){
+    imgScale = imgScale === 1 ? 2.5 : 1
+    imgPanX = 0; imgPanY = 0
+    fullImg.style.transition = "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)"
+    fullImg.style.transform = `translate(0px, 0px) scale(${imgScale})`
+    imgLastTapTime = 0
+  } else {
+    imgLastTapTime = now
+  }
 })
 
 window.showImage=function(src){
-  imgScale=1;fullImg.src=src
-  fullImg.style.transform="scale(1)"
-  fullImg.style.transition="transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)"
-  fullImg.style.cursor="zoom-in"
-  imgViewer.style.background="rgba(0,0,0,0.95)"
-  imgViewer.style.display="flex"
+  imgScale=1; imgPanX=0; imgPanY=0
+  fullImg.src=src
+  fullImg.style.transform = "translate(0px, 0px) scale(1)"
+  fullImg.style.transition = "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)"
+  imgViewer.style.background = "rgba(0,0,0,0.85)"
+  imgViewer.style.display = "flex"
+  void imgViewer.offsetWidth
+  imgViewer.classList.remove("hidden")
 }
 
 const emojis="😇 😆 😅 😂 🤣 ☺️ 😊 😇 🙂 🙃 😉 😌 😛 🥰 🥰 😘 😋 😎 🤨 😏 😒 😞 😔 ☹️ 😣 😫 🥺 😭 😤 😳 😨 😰 😥 😓 🤗 🤔 🤭 🤫 😐 😑 😶 🙄 🤐 🤧 🌚 😮‍💨 🥲 🤤 🧐 🥵 🥶 😇 😴 🌞 💋 🫶 👀 🤏 🫵 👉 👈 🌹 🥀 🌝 🙈 🐼 🍒 🍎 🍉 🍑 🍌 🍆 🍫 🍦 🍧 🍨 ❤️ 💚 💙 🖤 🩷 🩵 ❌ 🆗 💖 💓 💗 💝 💞 🖤 ❤️‍🔥 👻 😹 😻 😼 😽 🙀 😿 😾".split(" ")
@@ -3110,8 +3223,9 @@ window.toggleSpeaker = function(){
 </script>
 
 <!-- Image Viewer -->
-<div id="imgViewer" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);justify-content:center;align-items:center;z-index:9999;overflow:hidden;touch-action:none;">
-<img id="fullImg" style="max-width:100%;max-height:100%;transform:scale(1);transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94);cursor:zoom-in;">
+<div id="imgViewer" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;justify-content:center;align-items:center;z-index:9999;overflow:hidden;touch-action:none;">
+  <button id="imgCloseBtn">✕</button>
+  <img id="fullImg" style="max-width:100%;max-height:100%;">
 </div>
 
 <!-- Media Bottom Sheet -->
