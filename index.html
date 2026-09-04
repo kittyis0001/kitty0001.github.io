@@ -1716,7 +1716,7 @@ window.openVideoPicker = function(){
   document.getElementById("videoInput").click()
 }
 
-// ── Upload with progress (XHR for progress events) ──
+// ── Reuse existing Cloudinary upload configuration/endpoint with XHR for progress ──
 function uploadMediaWithProgress(file, onProgress){
   return new Promise((resolve, reject)=>{
     const xhr = new XMLHttpRequest()
