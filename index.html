@@ -1885,35 +1885,15 @@ async function handlePhotoSelect(input){
 
   const bubble = createUploadBubble()
 
-  let pendingReply=null
-  if(replyingTo){
-    let replyPreview = replyingTo.text ? replyingTo.text.substring(0,80) : ""
-    if(replyingTo.text && replyingTo.text.startsWith("__voice__")) replyPreview = "🎤 Voice message"
-    else if(replyingTo.text && replyingTo.text.startsWith("__gif__")) replyPreview = "🎞️ GIF"
-    else if(replyingTo.type === "image") replyPreview = "📷 Photo"
-    else if(replyingTo.type === "video") replyPreview = "🎥 Video"
-    pendingReply={
-      key:replyingTo.key,
-      name:replyingTo.name,
-      text:replyPreview,
-      type:replyingTo.type,
-      thumb:replyingTo.thumb,
-      duration:replyingTo.duration
-    }
-  }
-
   try {
     const url = await uploadMediaWithProgress(file, pct=>bubble.setProgress(pct))
-    const msgData = {
+    await push(ref(db, "messages"), {
       name: username,
       type: "image",
       text: url,
       time: Date.now(),
       seen: false
-    }
-    if(pendingReply) msgData.replyTo = pendingReply
-    await push(ref(db, "messages"), msgData)
-    if(pendingReply){ replyingTo=null; replyBar.style.display="none" }
+    })
     bubble.remove()
   } catch(e){
     bubble.remove()
@@ -2153,14 +2133,14 @@ function startReply(key, name, text, type, duration){
   } else if (text && isImageUrl(text)) {
     thumb = text;
   }
-  
+
   replyingTo = {key, name, text, type, thumb, duration};
-  
+
   replyBarName.innerText = getNick(name);
   let preview = text ? text.substring(0,60) : "";
   if(text && text.startsWith("__voice__")) preview = "🎤 Voice message";
   else if(text && text.startsWith("__gif__")) preview = "🎞️ GIF";
-  else if(type === "image") preview = "📷 Photo";
+  else if(type === "image" || (text && isImageUrl(text))) preview = "📷 Photo";
   else if(type === "video") preview = "🎥 Video";
   replyBarText.innerText = preview;
 
@@ -2172,9 +2152,9 @@ function startReply(key, name, text, type, duration){
     }
     thumbHtml += `</div>`;
   }
-  
+
   replyBarContent.innerHTML = `${thumbHtml}<div style="overflow:hidden;flex:1;"><div class="replyBarName">${getNick(name)}</div><div class="replyBarText">${preview}</div></div>`;
-  
+
   replyBar.style.display = "flex";
   msgBox.focus();
 }
@@ -2397,60 +2377,69 @@ window.start=async function(){
 // ─────────────────────────────────────────────
 // SEND
 // ─────────────────────────────────────────────
-window.send=async function(){
-  if(isBlocked()) return
-  const text=msgBox.value.trim()
-  if(!text) return
+window.send = async function() {
+  if(isBlocked()) return;
+  const text = msgBox.value.trim();
+  if(!text) return;
 
-  if(editingKey){
-    await update(ref(db,"messages/"+editingKey),{text:text,edited:true})
-    editingKey=null; editBar.style.display="none"
-    sendBtn.innerText="➤"
-    msgBox.value=""; msgBox.style.height="auto"
-    const _micE=document.getElementById("micBtn"); if(_micE)_micE.style.display="flex"
-    const _camE=document.getElementById("cameraBtn"); if(_camE)_camE.style.display="flex"
-    sendBtn.style.display="none"
-    return
+  if(editingKey) {
+    await update(ref(db, "messages/" + editingKey), { text: text, edited: true });
+    editingKey = null;
+    editBar.style.display = "none";
+    sendBtn.innerText = "➤";
+    msgBox.value = "";
+    msgBox.style.height = "auto";
+    const _micE = document.getElementById("micBtn"); if(_micE) _micE.style.display = "flex";
+    const _camE = document.getElementById("cameraBtn"); if(_camE) _camE.style.display = "flex";
+    sendBtn.style.display = "none";
+    return;
   }
 
-  const msgData={name:username,text:text,time:Date.now(),seen:false}
+  const msgData = {
+    name: username,
+    text: text,
+    time: Date.now(),
+    seen: false
+  };
 
-  let pendingReplyClear=false
-  if(replyingTo){
-    let replyPreview = replyingTo.text ? replyingTo.text.substring(0,80) : ""
-    if(replyingTo.text && replyingTo.text.startsWith("__voice__")) replyPreview = "🎤 Voice message"
-    else if(replyingTo.text && replyingTo.text.startsWith("__gif__")) replyPreview = "🎞️ GIF"
-    else if(replyingTo.type === "image") replyPreview = "📷 Photo"
-    else if(replyingTo.type === "video") replyPreview = "🎥 Video"
+  if(replyingTo) {
+    let replyPreview = replyingTo.text ? replyingTo.text.substring(0, 80) : "";
+    if(replyingTo.text && replyingTo.text.startsWith("__voice__")) replyPreview = "🎤 Voice message";
+    else if(replyingTo.text && replyingTo.text.startsWith("__gif__")) replyPreview = "🎞️ GIF";
+    else if(replyingTo.type === "image" || (replyingTo.text && isImageUrl(replyingTo.text))) replyPreview = "📷 Photo";
+    else if(replyingTo.type === "video") replyPreview = "🎥 Video";
 
-    msgData.replyTo={
-      key:replyingTo.key,
-      name:replyingTo.name,
-      text:replyPreview,
-      type:replyingTo.type,
-      thumb:replyingTo.thumb,
-      duration:replyingTo.duration
-    }
-    pendingReplyClear=true
+    let replyToObj = {
+      key: replyingTo.key,
+      name: replyingTo.name,
+      text: replyPreview
+    };
+    if(replyingTo.type) replyToObj.type = replyingTo.type;
+    if(replyingTo.thumb) replyToObj.thumb = replyingTo.thumb;
+    if(replyingTo.duration) replyToObj.duration = replyingTo.duration;
+
+    msgData.replyTo = replyToObj;
   }
 
-  try{
-    await push(ref(db,"messages"),msgData)
-  }catch(e){
-    alert("Message failed to send ⚠️")
-    return
+  try {
+    await push(ref(db, "messages"), msgData);
+    // Clear reply preview bar AFTER successful save
+    replyingTo = null;
+    replyBar.style.display = "none";
+  } catch(e) {
+    alert("Message failed to send ⚠️");
+    return;
   }
 
-  if(pendingReplyClear){ replyingTo=null; replyBar.style.display="none" }
-
-  msgBox.value=""; msgBox.style.height="auto"
-  gifPanel.style.display="none"
-  set(ref(db,"typing/"+username),false)
-  clearTimeout(typingTimeout)
-  const _mic=document.getElementById("micBtn"); if(_mic)_mic.style.display="flex"
-  const _cam=document.getElementById("cameraBtn"); if(_cam)_cam.style.display="flex"
-  sendBtn.style.display="none"
-}
+  msgBox.value = "";
+  msgBox.style.height = "auto";
+  gifPanel.style.display = "none";
+  set(ref(db, "typing/" + username), false);
+  clearTimeout(typingTimeout);
+  const _mic = document.getElementById("micBtn"); if(_mic) _mic.style.display = "flex";
+  const _cam = document.getElementById("cameraBtn"); if(_cam) _cam.style.display = "flex";
+  sendBtn.style.display = "none";
+};
 
 function scrollToBottom(){
   setTimeout(()=>{ messagesEl.scrollTop = messagesEl.scrollHeight }, 50)
