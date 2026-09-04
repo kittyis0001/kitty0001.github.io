@@ -1885,15 +1885,35 @@ async function handlePhotoSelect(input){
 
   const bubble = createUploadBubble()
 
+  let pendingReply=null
+  if(replyingTo){
+    let replyPreview = replyingTo.text ? replyingTo.text.substring(0,80) : ""
+    if(replyingTo.text && replyingTo.text.startsWith("__voice__")) replyPreview = "🎤 Voice message"
+    else if(replyingTo.text && replyingTo.text.startsWith("__gif__")) replyPreview = "🎞️ GIF"
+    else if(replyingTo.type === "image") replyPreview = "📷 Photo"
+    else if(replyingTo.type === "video") replyPreview = "🎥 Video"
+    pendingReply={
+      key:replyingTo.key,
+      name:replyingTo.name,
+      text:replyPreview,
+      type:replyingTo.type,
+      thumb:replyingTo.thumb,
+      duration:replyingTo.duration
+    }
+  }
+
   try {
     const url = await uploadMediaWithProgress(file, pct=>bubble.setProgress(pct))
-    await push(ref(db, "messages"), {
+    const msgData = {
       name: username,
       type: "image",
       text: url,
       time: Date.now(),
       seen: false
-    })
+    }
+    if(pendingReply) msgData.replyTo = pendingReply
+    await push(ref(db, "messages"), msgData)
+    if(pendingReply){ replyingTo=null; replyBar.style.display="none" }
     bubble.remove()
   } catch(e){
     bubble.remove()
@@ -2395,6 +2415,7 @@ window.send=async function(){
 
   const msgData={name:username,text:text,time:Date.now(),seen:false}
 
+  let pendingReplyClear=false
   if(replyingTo){
     let replyPreview = replyingTo.text ? replyingTo.text.substring(0,80) : ""
     if(replyingTo.text && replyingTo.text.startsWith("__voice__")) replyPreview = "🎤 Voice message"
@@ -2410,10 +2431,18 @@ window.send=async function(){
       thumb:replyingTo.thumb,
       duration:replyingTo.duration
     }
-    replyingTo=null; replyBar.style.display="none"
+    pendingReplyClear=true
   }
 
-  push(ref(db,"messages"),msgData)
+  try{
+    await push(ref(db,"messages"),msgData)
+  }catch(e){
+    alert("Message failed to send ⚠️")
+    return
+  }
+
+  if(pendingReplyClear){ replyingTo=null; replyBar.style.display="none" }
+
   msgBox.value=""; msgBox.style.height="auto"
   gifPanel.style.display="none"
   set(ref(db,"typing/"+username),false)
