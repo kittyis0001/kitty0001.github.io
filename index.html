@@ -15,7 +15,6 @@ background-attachment:fixed;
 height:100vh;
 }
 
-
 /* ═══════════════════════════════════════════════════════
    ACCESS KEY PAGE — simple, original design
    ═══════════════════════════════════════════════════════ */
@@ -1214,7 +1213,10 @@ body.dark-theme .mediaSheetItem span { color: #e9edef; }
 </div>
 
 <div id="replyBar">
-  <div class="replyBarContent" id="replyBarContent"></div>
+  <div class="replyBarContent" id="replyBarContent">
+    <div class="replyBarName" id="replyBarName"></div>
+    <div class="replyBarText" id="replyBarText"></div>
+  </div>
   <button id="replyBarClose">✕</button>
 </div>
 
@@ -2104,6 +2106,8 @@ msgBox.addEventListener("keydown", function (e) {
 // ─────────────────────────────────────────────
 let replyingTo = null
 const replyBar = document.getElementById("replyBar")
+const replyBarName = document.getElementById("replyBarName")
+const replyBarText = document.getElementById("replyBarText")
 const replyBarContent = document.getElementById("replyBarContent")
 const replyBarClose = document.getElementById("replyBarClose")
 
@@ -2120,26 +2124,25 @@ window.scrollToMsg = function(key) {
 
 function startReply(key, name, text, type, duration){
   let thumb = null;
-  let previewText = text.substring(0,60);
-  
-  if (text === "__deleted__") {
-    previewText = "🚫 Message deleted";
-  } else if (text.startsWith("__voice__")) {
-    previewText = "🎤 Voice message";
-  } else if (text.startsWith("__gif__")) {
-    previewText = "🎞️ GIF";
-    thumb = text.replace("__gif__", "");
-  } else if (type === "image") {
-    previewText = "Photo";
+  if (type === "image") {
     thumb = text;
   } else if (type === "video") {
-    previewText = "Video";
     thumb = getVideoThumbnail(text);
-  } else if (isImageUrl(text)) {
+  } else if (text && text.startsWith("__gif__")) {
+    thumb = text.replace("__gif__", "");
+  } else if (text && isImageUrl(text)) {
     thumb = text;
   }
-
-  replyingTo = { key, name, text: previewText, type, thumb, duration };
+  
+  replyingTo = {key, name, text, type, thumb, duration};
+  
+  replyBarName.innerText = getNick(name);
+  let preview = text ? text.substring(0,60) : "";
+  if(text && text.startsWith("__voice__")) preview = "🎤 Voice message";
+  else if(text && text.startsWith("__gif__")) preview = "🎞️ GIF";
+  else if(type === "image") preview = "📷 Photo";
+  else if(type === "video") preview = "🎥 Video";
+  replyBarText.innerText = preview;
 
   let thumbHtml = "";
   if (thumb) {
@@ -2149,8 +2152,9 @@ function startReply(key, name, text, type, duration){
     }
     thumbHtml += `</div>`;
   }
-
-  replyBarContent.innerHTML = `${thumbHtml}<div style="overflow:hidden;"><div class="replyBarName">${getNick(name)}</div><div class="replyBarText">${previewText}</div></div>`;
+  
+  replyBarContent.innerHTML = `${thumbHtml}<div style="overflow:hidden;flex:1;"><div class="replyBarName">${getNick(name)}</div><div class="replyBarText">${preview}</div></div>`;
+  
   replyBar.style.display = "flex";
   msgBox.focus();
 }
@@ -2373,57 +2377,51 @@ window.start=async function(){
 // ─────────────────────────────────────────────
 // SEND
 // ─────────────────────────────────────────────
-window.send = async function() {
-  if(isBlocked()) return;
-  const text = msgBox.value.trim();
-  if(!text) return;
+window.send=async function(){
+  if(isBlocked()) return
+  const text=msgBox.value.trim()
+  if(!text) return
 
-  if(editingKey) {
-    await update(ref(db, "messages/" + editingKey), { text: text, edited: true });
-    editingKey = null;
-    editBar.style.display = "none";
-    sendBtn.innerText = "➤";
-    msgBox.value = "";
-    msgBox.style.height = "auto";
-    const _micE = document.getElementById("micBtn"); if(_micE) _micE.style.display = "flex";
-    const _camE = document.getElementById("cameraBtn"); if(_camE) _camE.style.display = "flex";
-    sendBtn.style.display = "none";
-    return;
+  if(editingKey){
+    await update(ref(db,"messages/"+editingKey),{text:text,edited:true})
+    editingKey=null; editBar.style.display="none"
+    sendBtn.innerText="➤"
+    msgBox.value=""; msgBox.style.height="auto"
+    const _micE=document.getElementById("micBtn"); if(_micE)_micE.style.display="flex"
+    const _camE=document.getElementById("cameraBtn"); if(_camE)_camE.style.display="flex"
+    sendBtn.style.display="none"
+    return
   }
 
-  const msgData = {
-    name: username,
-    text: text,
-    time: Date.now(),
-    seen: false
-  };
+  const msgData={name:username,text:text,time:Date.now(),seen:false}
 
-  if(replyingTo) {
-    msgData.replyTo = {
-      key: replyingTo.key,
-      name: replyingTo.name,
-      text: replyingTo.text,
-      type: replyingTo.type,
-      thumb: replyingTo.thumb,
-      duration: replyingTo.duration
-    };
+  if(replyingTo){
+    let replyPreview = replyingTo.text ? replyingTo.text.substring(0,80) : ""
+    if(replyingTo.text && replyingTo.text.startsWith("__voice__")) replyPreview = "🎤 Voice message"
+    else if(replyingTo.text && replyingTo.text.startsWith("__gif__")) replyPreview = "🎞️ GIF"
+    else if(replyingTo.type === "image") replyPreview = "📷 Photo"
+    else if(replyingTo.type === "video") replyPreview = "🎥 Video"
+
+    msgData.replyTo={
+      key:replyingTo.key,
+      name:replyingTo.name,
+      text:replyPreview,
+      type:replyingTo.type,
+      thumb:replyingTo.thumb,
+      duration:replyingTo.duration
+    }
+    replyingTo=null; replyBar.style.display="none"
   }
 
-  push(ref(db, "messages"), msgData).then(() => {
-    // Clear reply preview bar AFTER successful save
-    replyingTo = null;
-    replyBar.style.display = "none";
-  });
-
-  msgBox.value = "";
-  msgBox.style.height = "auto";
-  gifPanel.style.display = "none";
-  set(ref(db, "typing/" + username), false);
-  clearTimeout(typingTimeout);
-  const _mic = document.getElementById("micBtn"); if(_mic) _mic.style.display = "flex";
-  const _cam = document.getElementById("cameraBtn"); if(_cam) _cam.style.display = "flex";
-  sendBtn.style.display = "none";
-};
+  push(ref(db,"messages"),msgData)
+  msgBox.value=""; msgBox.style.height="auto"
+  gifPanel.style.display="none"
+  set(ref(db,"typing/"+username),false)
+  clearTimeout(typingTimeout)
+  const _mic=document.getElementById("micBtn"); if(_mic)_mic.style.display="flex"
+  const _cam=document.getElementById("cameraBtn"); if(_cam)_cam.style.display="flex"
+  sendBtn.style.display="none"
+}
 
 function scrollToBottom(){
   setTimeout(()=>{ messagesEl.scrollTop = messagesEl.scrollHeight }, 50)
