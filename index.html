@@ -834,6 +834,244 @@ body.dark-theme #blockedBanner {
   color: #ef9a9a !important;
 }
 
+
+/* ══════════════════════════════════════════════════════
+   PHOTO & VIDEO UPLOAD FEATURE — ADDED
+   All rules below are new; nothing above this point was edited.
+   ══════════════════════════════════════════════════════ */
+
+#inputArea{ position:relative; }
+
+#cameraBtn{
+  position:absolute;
+  right:52px;
+  bottom:16px;
+  width:26px;height:26px;
+  padding:0;
+  border:none;
+  border-radius:50%;
+  background:transparent;
+  color:#8a72c8;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  transition:opacity 0.15s, transform 0.15s;
+  z-index:2;
+}
+#cameraBtn:active{ transform:scale(0.88); }
+#cameraBtn svg{ width:22px;height:22px; }
+body.dark-theme #cameraBtn{ color:#8696a0; }
+
+/* Media bottom sheet */
+#mediaSheetOverlay{
+  display:none;
+  position:fixed;
+  top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.4);
+  z-index:9990;
+}
+#mediaSheet{
+  display:none;
+  position:fixed;
+  left:0;
+  bottom:0;
+  width:100%;
+  background:rgba(255,255,255,0.97);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border-radius:20px 20px 0 0;
+  box-shadow:0 -8px 30px rgba(140,100,200,0.25);
+  z-index:9991;
+  padding:10px 14px 26px;
+  box-sizing:border-box;
+  transform:translateY(100%);
+  transition:transform 0.28s cubic-bezier(0.2,0.9,0.3,1.1);
+}
+#mediaSheet.sheet-open{ transform:translateY(0); }
+.mediaSheetHandle{
+  width:40px;height:4px;
+  background:rgba(140,110,200,0.3);
+  border-radius:4px;
+  margin:6px auto 14px;
+}
+.mediaSheetOption{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:14px 8px;
+  font-size:16px;
+  color:#3a2a5a;
+  cursor:pointer;
+  border-radius:12px;
+}
+.mediaSheetOption:active{ background:rgba(140,100,220,0.08); }
+.mediaSheetOption svg{ width:26px;height:26px;flex-shrink:0;color:#8a5ad4; }
+.mediaSheetCancel{
+  text-align:center;
+  padding:14px 8px 2px;
+  font-size:15px;
+  font-weight:bold;
+  color:#8a5ad4;
+  cursor:pointer;
+  border-top:1px solid rgba(140,100,200,0.15);
+  margin-top:6px;
+}
+body.dark-theme #mediaSheet{ background:#233138; box-shadow:0 -8px 30px rgba(0,0,0,0.5); }
+body.dark-theme .mediaSheetOption{ color:#e9edef; }
+body.dark-theme .mediaSheetOption svg{ color:#00a884; }
+body.dark-theme .mediaSheetCancel{ color:#00a884; border-top-color:rgba(255,255,255,0.08); }
+body.dark-theme .mediaSheetHandle{ background:rgba(255,255,255,0.2); }
+
+/* Media (photo/video) message bubbles */
+.mediaBubble{
+  position:relative;
+  max-width:230px;
+  border-radius:14px;
+  overflow:hidden;
+  cursor:pointer;
+  display:block;
+  line-height:0;
+}
+.mediaBubble .mediaImg, .mediaBubble .mediaVideoThumb{
+  display:block;
+  width:100%;
+  max-height:300px;
+  min-height:120px;
+  object-fit:cover;
+  background:#0002;
+}
+.mediaBubble .time.mediaBubbleMeta{
+  position:absolute;
+  right:8px;
+  bottom:6px;
+  font-size:11px;
+  color:#fff;
+  background:rgba(0,0,0,0.38);
+  padding:2px 7px;
+  border-radius:10px;
+  text-align:left;
+  margin-top:0;
+}
+.videoPlayOverlay{
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:52px;height:52px;
+  border-radius:50%;
+  background:rgba(0,0,0,0.45);
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;
+  pointer-events:none;
+}
+.videoPlayOverlay svg{ width:24px;height:24px;margin-left:3px; }
+.hdBadge{
+  position:absolute;
+  top:8px;left:8px;
+  background:rgba(0,0,0,0.5);
+  color:#fff;
+  font-size:10px;
+  font-weight:bold;
+  padding:2px 6px;
+  border-radius:5px;
+  letter-spacing:0.5px;
+}
+.videoDurationBadge{
+  position:absolute;
+  left:8px;bottom:6px;
+  background:rgba(0,0,0,0.5);
+  color:#fff;
+  font-size:11px;
+  padding:2px 7px;
+  border-radius:10px;
+}
+
+/* Upload progress overlay */
+.uploadOverlay{
+  position:absolute;
+  top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.42);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.uploadRing{ position:relative; width:46px;height:46px; }
+.uploadRing svg{ width:46px;height:46px;transform:rotate(-90deg); }
+.uploadRing circle{ fill:none; stroke-width:4; }
+.uploadRing .ringBg{ stroke:rgba(255,255,255,0.25); }
+.uploadRing .ringFg{ stroke:#ffffff; stroke-linecap:round; transition:stroke-dashoffset 0.15s linear; }
+.uploadPercent{
+  position:absolute;
+  top:0;left:0;width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;
+  color:#fff;
+  font-weight:bold;
+}
+
+/* Fullscreen video viewer */
+#videoViewer{
+  display:none;
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:#000;
+  z-index:9998;
+  flex-direction:column;
+  touch-action:none;
+}
+#videoViewer video{
+  flex:1;
+  width:100%;
+  object-fit:contain;
+  background:#000;
+  transform-origin:center center;
+}
+#videoViewerTop{
+  position:absolute;top:0;left:0;width:100%;
+  display:flex;justify-content:flex-end;
+  padding:16px;
+  box-sizing:border-box;
+  z-index:2;
+}
+#videoViewerClose{
+  background:rgba(0,0,0,0.4);
+  border:none;color:#fff;
+  width:36px;height:36px;
+  border-radius:50%;
+  font-size:18px;
+  cursor:pointer;
+}
+#videoViewerControls{
+  position:absolute;bottom:0;left:0;width:100%;
+  background:linear-gradient(0deg, rgba(0,0,0,0.75), transparent);
+  padding:10px 14px 18px;
+  box-sizing:border-box;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  z-index:2;
+}
+#videoViewerControls button{
+  background:none;border:none;color:#fff;font-size:20px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+#videoSeekBar{
+  flex:1;
+  -webkit-appearance:none;
+  height:4px;
+  border-radius:4px;
+  background:rgba(255,255,255,0.3);
+  outline:none;
+}
+#videoSeekBar::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:13px;height:13px;
+  border-radius:50%;
+  background:#fff;
+  cursor:pointer;
+}
+#videoTimeLabel{ color:#fff;font-size:12px;min-width:70px;text-align:center; }
+
 </style>
 <link rel="stylesheet" href="story.css">
 <link rel="stylesheet" href="shorts.css">
@@ -887,6 +1125,8 @@ body.dark-theme #blockedBanner {
 
 <input type="file" id="imgInput" accept="image/*" style="display:none" onchange="uploadImage(this)">
 <input type="file" id="profilePicInput" accept="image/*" style="display:none" onchange="uploadProfilePic(this)">
+<input type="file" id="mediaPhotoInput" accept="image/*" style="display:none" onchange="handleMediaSelect(this,'image')">
+<input type="file" id="mediaVideoInput" accept="video/*" style="display:none" onchange="handleMediaSelect(this,'video')">
 
 <div id="typingIndicator"></div>
 <div id="messages"></div>
@@ -919,6 +1159,12 @@ body.dark-theme #blockedBanner {
 <div id="inputArea">
 <button onclick="toggleEmoji()" style="font-size:20px;background:none;border:none;margin-right:5px;padding:8px 0;flex-shrink:0;">😊</button>
 <textarea id="msg" placeholder="Type message..." rows="1"></textarea>
+<button id="cameraBtn" title="Camera">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 8a2 2 0 0 1 2-2h1.2l1-1.6A2 2 0 0 1 9.9 3.4h4.2a2 2 0 0 1 1.7 1L17 6h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z"/>
+    <circle cx="12" cy="13" r="3.5"/>
+  </svg>
+</button>
 <button id="micBtn" onclick="triggerVoiceRecord()" title="Voice message">
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="20" height="20">
     <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
@@ -1640,7 +1886,7 @@ let longPressTimer=null
 
 function showActionMenu(msgDiv, key, isMe, message){
   currentMsgKey=key; currentMsgIsMe=isMe; currentMsgData=message
-  document.getElementById("actionEdit").style.display=(isMe&&!message.text.startsWith("__voice__")&&!message.text.startsWith("__gif__"))?"flex":"none"
+  document.getElementById("actionEdit").style.display=(isMe&&!message.type&&!message.text.startsWith("__voice__")&&!message.text.startsWith("__gif__"))?"flex":"none"
   document.getElementById("actionDelete").style.display=isMe?"flex":"none"
   actionMenu.style.display="flex"
   const rect=msgDiv.getBoundingClientRect()
@@ -1898,6 +2144,7 @@ function buildTimeHtml(message,isMe){
 }
 
 function createMessage(message,key){
+  if(message.type==="image"||message.type==="video"){ createMediaMessage(message,key); return }
   if(message.type==="system"){
     const div=document.createElement("div")
     div.className="sysMsg"
@@ -2011,7 +2258,7 @@ onChildChanged(ref(db,"messages"),data=>{
   const key=data.key
   const row=document.getElementById(key)
   if(!row) return
-  if(message.type) return
+  if(message.type==="system") return
 
   const msgDiv=row.querySelector(".msg")
   if(!msgDiv) return
@@ -2513,10 +2760,423 @@ window.toggleSpeaker = function(){
   lbl.innerText=isSpeakerOn?"Speaker On":"Speaker"
 }
 
+// ══════════════════════════════════════════════
+// PHOTO & VIDEO UPLOAD — ADDED FEATURE (Cloudinary)
+// Nothing above this block was modified except two tiny,
+// necessary one-line hooks (createMessage dispatch,
+// onChildChanged system-only guard, showActionMenu edit
+// visibility) so media messages plug into the existing
+// reply/react/delete/ticks pipeline instead of a parallel one.
+// ══════════════════════════════════════════════
+
+// 🔧 REQUIRED: put your own Cloudinary account values here.
+// Cloud name  → Cloudinary dashboard home page.
+// Upload preset → Cloudinary Settings → Upload → Upload presets →
+//                 create a new preset with Signing Mode = "Unsigned".
+const CLOUDINARY_CLOUD_NAME   = "YOUR_CLOUDINARY_CLOUD_NAME"
+const CLOUDINARY_UPLOAD_PRESET = "YOUR_UNSIGNED_UPLOAD_PRESET"
+
+const photoInputEl      = document.getElementById("mediaPhotoInput")
+const videoInputEl      = document.getElementById("mediaVideoInput")
+const mediaSheet        = document.getElementById("mediaSheet")
+const mediaSheetOverlay = document.getElementById("mediaSheetOverlay")
+const cameraBtn         = document.getElementById("cameraBtn")
+
+// Camera icon hides while typing — a second, independent listener on
+// #msg. It does not replace or interfere with the existing "input"
+// listener above (mic/send swap, typing status, GIF search); both
+// simply run on every keystroke.
+msgBox.addEventListener("input", function(){
+  if(!cameraBtn) return
+  cameraBtn.style.display = this.value.length>0 ? "none" : "flex"
+})
+
+window.openMediaSheet = function(){
+  if(isBlocked()){ alert("🚫 Messaging is blocked"); return }
+  mediaSheetOverlay.style.display="block"
+  mediaSheet.style.display="block"
+  void mediaSheet.offsetWidth
+  mediaSheet.classList.add("sheet-open")
+}
+
+window.closeMediaSheet = function(){
+  mediaSheet.classList.remove("sheet-open")
+  setTimeout(()=>{
+    mediaSheet.style.display="none"
+    mediaSheetOverlay.style.display="none"
+  },250)
+}
+
+if(cameraBtn) cameraBtn.addEventListener("click", openMediaSheet)
+mediaSheetOverlay.addEventListener("click", closeMediaSheet)
+document.getElementById("mediaSheetCancel").addEventListener("click", closeMediaSheet)
+document.getElementById("mediaSheetPhoto").addEventListener("click", ()=>{ closeMediaSheet(); photoInputEl.click() })
+document.getElementById("mediaSheetVideo").addEventListener("click", ()=>{ closeMediaSheet(); videoInputEl.click() })
+
+function formatDuration(sec){
+  if(!isFinite(sec)||sec<0) return "0:00"
+  const m=Math.floor(sec/60), s=Math.floor(sec%60)
+  return m+":"+("0"+s).slice(-2)
+}
+
+function getVideoMeta(file){
+  return new Promise(resolve=>{
+    const v=document.createElement("video")
+    v.preload="metadata"
+    v.src=URL.createObjectURL(file)
+    v.onloadedmetadata=()=>{
+      const result={ duration:v.duration, isHD:v.videoHeight>=720, width:v.videoWidth, height:v.videoHeight }
+      URL.revokeObjectURL(v.src)
+      resolve(result)
+    }
+    v.onerror=()=>resolve({duration:0,isHD:false})
+  })
+}
+
+function uploadToCloudinary(file, resourceType, onProgress){
+  return new Promise((resolve, reject)=>{
+    const formData=new FormData()
+    formData.append("file", file)
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET)
+    const xhr=new XMLHttpRequest()
+    xhr.open("POST", "https://api.cloudinary.com/v1_1/"+CLOUDINARY_CLOUD_NAME+"/"+resourceType+"/upload")
+    xhr.upload.onprogress=e=>{ if(e.lengthComputable&&onProgress) onProgress(Math.round((e.loaded/e.total)*100)) }
+    xhr.onload=()=>{
+      try{
+        const data=JSON.parse(xhr.responseText)
+        if(xhr.status>=200&&xhr.status<300&&data.secure_url) resolve(data)
+        else reject(new Error((data&&data.error&&data.error.message)||"Upload failed"))
+      }catch(e){ reject(e) }
+    }
+    xhr.onerror=()=>reject(new Error("Network error during upload"))
+    xhr.send(formData)
+  })
+}
+
+function createUploadPlaceholder(previewUrl, isVideo){
+  const row=document.createElement("div")
+  row.className="msgRow me"
+  const avatarImg=document.createElement("img")
+  avatarImg.className="avatar"
+  avatarImg.src=getAvatar(username)
+  const div=document.createElement("div")
+  div.classList.add("msg")
+  div.style.padding="0"
+  const bubble=document.createElement("div")
+  bubble.className="mediaBubble"
+  const media=document.createElement(isVideo?"video":"img")
+  media.className=isVideo?"mediaVideoThumb":"mediaImg"
+  if(isVideo) media.muted=true
+  media.src=previewUrl
+  const overlay=document.createElement("div")
+  overlay.className="uploadOverlay"
+  overlay.innerHTML='<div class="uploadRing"><svg viewBox="0 0 46 46">'+
+    '<circle class="ringBg" cx="23" cy="23" r="19"></circle>'+
+    '<circle class="ringFg" cx="23" cy="23" r="19" stroke-dasharray="119.4" stroke-dashoffset="119.4"></circle>'+
+    '</svg><div class="uploadPercent">0%</div></div>'
+  bubble.appendChild(media)
+  bubble.appendChild(overlay)
+  div.appendChild(bubble)
+  row.appendChild(avatarImg)
+  row.appendChild(div)
+  messagesEl.appendChild(row)
+  scrollToBottom()
+  return {
+    row,
+    updateProgress(pct){
+      const ringFg=overlay.querySelector(".ringFg")
+      const pctLabel=overlay.querySelector(".uploadPercent")
+      const circumference=119.4
+      ringFg.style.strokeDashoffset = circumference-(circumference*pct/100)
+      pctLabel.innerText = pct+"%"
+    }
+  }
+}
+
+async function handleMediaUpload(file, mediaType){
+  if(isBlocked()) return
+  const previewUrl=URL.createObjectURL(file)
+  const placeholder=createUploadPlaceholder(previewUrl, mediaType==="video")
+
+  let duration=0, isHD=false
+  if(mediaType==="video"){
+    const meta=await getVideoMeta(file)
+    duration=meta.duration||0
+    isHD=meta.isHD||false
+  }
+
+  try{
+    const resourceType = mediaType==="video" ? "video" : "image"
+    const result = await uploadToCloudinary(file, resourceType, pct=>placeholder.updateProgress(pct))
+    placeholder.row.remove()
+    URL.revokeObjectURL(previewUrl)
+
+    const msgData={ name:username, type:mediaType, text:result.secure_url, url:result.secure_url, time:Date.now(), seen:false }
+    if(mediaType==="video"){
+      msgData.duration = duration || result.duration || 0
+      msgData.isHD = isHD || (result.height>=720)
+    }
+    push(ref(db,"messages"), msgData)
+  }catch(e){
+    placeholder.row.remove()
+    URL.revokeObjectURL(previewUrl)
+    alert("Upload failed ⚠️ "+((e&&e.message)||""))
+  }
+}
+
+window.handleMediaSelect = function(input, mediaType){
+  const file=input.files[0]
+  input.value=""
+  if(!file) return
+  handleMediaUpload(file, mediaType)
+}
+
+// Renders image/video messages using the same reply/reaction/tick
+// building blocks as regular text messages (buildTimeHtml,
+// renderReactions, addSwipeReply, showActionMenu) so every existing
+// feature keeps working on media messages too.
+function createMediaMessage(message, key){
+  const me=localStorage.getItem("chatUser")||username
+  const isMe=message.name==me
+  const displayName=getNick(message.name)
+
+  const row=document.createElement("div")
+  row.className="msgRow "+(isMe?"me":"other")
+  row.id=key
+
+  const avatarImg=document.createElement("img")
+  avatarImg.className="avatar"
+  avatarImg.dataset.user=message.name
+  avatarImg.src=getAvatar(message.name)
+  avatarImg.alt=displayName
+  avatarImg.onerror=function(){ this.src=DEFAULT_PIC }
+  avatarImg.addEventListener("click",e=>{
+    e.stopPropagation()
+    if(message.name===username) changeProfilePic()
+  })
+
+  const div=document.createElement("div")
+  div.classList.add("msg")
+  div.style.padding="0"
+  div.style.overflow="hidden"
+
+  if(message.deleted){
+    div.style.padding="10px 12px"
+    div.innerHTML=`<span style="color:#aaa;font-style:italic;font-size:13px;">🚫 Message deleted</span><div class="time">${buildTimeHtml(message,isMe)}</div>`
+    row.appendChild(avatarImg); row.appendChild(div)
+    messagesEl.appendChild(row); scrollToBottom()
+    return
+  }
+
+  if(message.replyTo){
+    const rName=getNick(message.replyTo.name)
+    const replyHtml=`<div class="replyQuote" style="margin:8px 8px 0;">${rName?`<div class="replyName">${rName}</div>`:""}${message.replyTo.text||""}</div>`
+    div.insertAdjacentHTML("beforeend", replyHtml)
+  }
+
+  const bubble=document.createElement("div")
+  bubble.className="mediaBubble"
+
+  if(message.type==="video"){
+    const vid=document.createElement("video")
+    vid.className="mediaVideoThumb"
+    vid.src=message.url+"#t=0.1"
+    vid.preload="metadata"
+    vid.muted=true
+    bubble.appendChild(vid)
+
+    const playOverlay=document.createElement("div")
+    playOverlay.className="videoPlayOverlay"
+    playOverlay.innerHTML='<svg viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>'
+    bubble.appendChild(playOverlay)
+
+    if(message.isHD){
+      const hd=document.createElement("div"); hd.className="hdBadge"; hd.innerText="HD"
+      bubble.appendChild(hd)
+    }
+    const durBadge=document.createElement("div")
+    durBadge.className="videoDurationBadge"
+    durBadge.innerText=formatDuration(message.duration||0)
+    bubble.appendChild(durBadge)
+
+    bubble.addEventListener("click", e=>{ e.stopPropagation(); openVideoViewer(message.url) })
+  } else {
+    const img=document.createElement("img")
+    img.className="mediaImg"
+    img.src=message.url
+    img.addEventListener("click", e=>{ e.stopPropagation(); showImage(img.src) })
+    bubble.appendChild(img)
+  }
+
+  const meta=document.createElement("div")
+  meta.className="time mediaBubbleMeta"
+  meta.innerHTML=buildTimeHtml(message,isMe)
+  bubble.appendChild(meta)
+
+  div.appendChild(bubble)
+  div.insertAdjacentHTML("beforeend", renderReactions(message.reactions,key))
+
+  div.addEventListener("touchstart",e=>{
+    longPressTimer=setTimeout(()=>showActionMenu(div,key,isMe,message),600)
+  },{passive:true})
+  div.addEventListener("touchend",()=>clearTimeout(longPressTimer))
+  div.addEventListener("touchmove",()=>clearTimeout(longPressTimer))
+  div.addEventListener("mousedown",()=>{ longPressTimer=setTimeout(()=>showActionMenu(div,key,isMe,message),600) })
+  div.addEventListener("mouseup",()=>clearTimeout(longPressTimer))
+
+  addSwipeReply(div,key,message)
+
+  row.appendChild(avatarImg)
+  row.appendChild(div)
+  messagesEl.appendChild(row)
+  scrollToBottom()
+}
+
+// ── Fullscreen video viewer: play/pause, seek, mute, fullscreen +
+//    landscape lock, pinch-to-zoom, double-tap zoom, swipe-down close.
+const videoViewer          = document.getElementById("videoViewer")
+const viewerVideo          = document.getElementById("viewerVideo")
+const videoSeekBar         = document.getElementById("videoSeekBar")
+const videoTimeLabel       = document.getElementById("videoTimeLabel")
+const videoPlayPauseBtn    = document.getElementById("videoPlayPauseBtn")
+const videoMuteBtn         = document.getElementById("videoMuteBtn")
+const videoFullscreenBtn   = document.getElementById("videoFullscreenBtn")
+
+let vScale=1, vStartDist=0, vStartScale=1, vStartY=0, vDragging=false
+
+window.openVideoViewer=function(url){
+  viewerVideo.src=url
+  viewerVideo.currentTime=0
+  videoViewer.style.display="flex"
+  videoViewer.style.background="#000"
+  vScale=1
+  viewerVideo.style.transform="scale(1) translateY(0)"
+  viewerVideo.muted=false
+  videoMuteBtn.innerText="🔊"
+  viewerVideo.play().then(()=>{ videoPlayPauseBtn.innerText="⏸" }).catch(()=>{})
+}
+
+function closeVideoViewer(){
+  viewerVideo.pause()
+  viewerVideo.removeAttribute("src")
+  viewerVideo.load()
+  videoViewer.style.display="none"
+  if(document.fullscreenElement) document.exitFullscreen().catch(()=>{})
+  try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock() }catch(e){}
+}
+
+document.getElementById("videoViewerClose").addEventListener("click", closeVideoViewer)
+
+videoPlayPauseBtn.addEventListener("click", ()=>{
+  if(viewerVideo.paused){ viewerVideo.play(); videoPlayPauseBtn.innerText="⏸" }
+  else{ viewerVideo.pause(); videoPlayPauseBtn.innerText="▶" }
+})
+
+videoMuteBtn.addEventListener("click", ()=>{
+  viewerVideo.muted=!viewerVideo.muted
+  videoMuteBtn.innerText=viewerVideo.muted?"🔇":"🔊"
+})
+
+videoFullscreenBtn.addEventListener("click", async ()=>{
+  try{
+    if(!document.fullscreenElement){
+      await videoViewer.requestFullscreen()
+      if(screen.orientation && screen.orientation.lock){
+        try{ await screen.orientation.lock("landscape") }catch(e){}
+      }
+    } else {
+      await document.exitFullscreen()
+    }
+  }catch(e){}
+})
+
+viewerVideo.addEventListener("timeupdate", ()=>{
+  if(viewerVideo.duration){
+    videoSeekBar.value=(viewerVideo.currentTime/viewerVideo.duration)*100
+    videoTimeLabel.innerText=formatDuration(viewerVideo.currentTime)+" / "+formatDuration(viewerVideo.duration)
+  }
+})
+
+videoSeekBar.addEventListener("input", ()=>{
+  if(viewerVideo.duration) viewerVideo.currentTime=(videoSeekBar.value/100)*viewerVideo.duration
+})
+
+viewerVideo.addEventListener("ended", ()=>{ videoPlayPauseBtn.innerText="▶" })
+
+videoViewer.addEventListener("touchstart", e=>{
+  if(e.touches.length===2){
+    vStartDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)
+    vStartScale=vScale
+  } else if(e.touches.length===1){
+    vStartY=e.touches[0].clientY
+    vDragging=true
+  }
+},{passive:true})
+
+videoViewer.addEventListener("touchmove", e=>{
+  if(e.touches.length===2){
+    e.preventDefault()
+    const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)
+    vScale=Math.min(Math.max(vStartScale*(dist/vStartDist),1),4)
+    viewerVideo.style.transform="scale("+vScale+")"
+  } else if(e.touches.length===1 && vDragging && vScale===1){
+    const dy=e.touches[0].clientY-vStartY
+    if(dy>0){
+      viewerVideo.style.transform="translateY("+dy+"px) scale("+Math.max(1-dy/700,0.7)+")"
+      videoViewer.style.background="rgba(0,0,0,"+Math.max(1-dy/400,0.3)+")"
+    }
+  }
+},{passive:false})
+
+videoViewer.addEventListener("touchend", e=>{
+  if(vDragging && vScale===1){
+    const endY=(e.changedTouches[0]&&e.changedTouches[0].clientY)||vStartY
+    const dy=endY-vStartY
+    if(dy>100){ closeVideoViewer() }
+    else{ viewerVideo.style.transform="translateY(0) scale(1)"; videoViewer.style.background="#000" }
+  }
+  vDragging=false
+})
+
+viewerVideo.addEventListener("dblclick", ()=>{
+  vScale = vScale===1 ? 2 : 1
+  viewerVideo.style.transform="scale("+vScale+")"
+})
+
 </script>
 
 <div id="imgViewer" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);justify-content:center;align-items:center;z-index:9999;overflow:hidden;touch-action:none;">
 <img id="fullImg" style="max-width:100%;max-height:100%;transform:scale(1);transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94);cursor:zoom-in;">
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PHOTO & VIDEO UPLOAD FEATURE — ADDED MARKUP
+     ══════════════════════════════════════════════ -->
+
+<div id="mediaSheetOverlay"></div>
+<div id="mediaSheet">
+  <div class="mediaSheetHandle"></div>
+  <div class="mediaSheetOption" id="mediaSheetPhoto">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>
+    Photo
+  </div>
+  <div class="mediaSheetOption" id="mediaSheetVideo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3z"/></svg>
+    Video
+  </div>
+  <div class="mediaSheetCancel" id="mediaSheetCancel">Cancel</div>
+</div>
+
+<div id="videoViewer">
+  <div id="videoViewerTop"><button id="videoViewerClose">✕</button></div>
+  <video id="viewerVideo" playsinline></video>
+  <div id="videoViewerControls">
+    <button id="videoPlayPauseBtn">⏸</button>
+    <input type="range" id="videoSeekBar" min="0" max="100" value="0">
+    <span id="videoTimeLabel">0:00 / 0:00</span>
+    <button id="videoMuteBtn">🔊</button>
+    <button id="videoFullscreenBtn">⛶</button>
+  </div>
 </div>
 
 </body>
