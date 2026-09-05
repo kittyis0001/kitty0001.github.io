@@ -1351,6 +1351,7 @@ body.dark-theme .mediaSheetItem span { color: #e9edef; }
 <!-- ✅ 3-DOT MENU UI — Instagram / WhatsApp Style -->
 <div id="menuBackdrop"></div>
 <div id="menuBox">
+  <!-- SINGLE PROFILE SECTION -->
   <div class="menuProfileSection">
     <div class="menuAvatarContainer">
       <img id="menuProfileAvatar" src="" class="menuAvatar" alt="Profile">
@@ -2397,10 +2398,10 @@ function startReply(key, name, text, type, duration){
 
   replyBarName.innerText = getNick(name);
   let preview = text ? text.substring(0,60) : "";
-  if(text && text.startsWith("__voice__")) preview = "🎤 Voice message";
+  if(text && text.startsWith("__voice__")) preview = " Voice message";
   else if(text && text.startsWith("__gif__")) preview = "🎞️ GIF";
-  else if(type === "image" || (text && isImageUrl(text))) preview = "📷 Photo";
-  else if(type === "video") preview = "🎥 Video";
+  else if(type === "image" || (text && isImageUrl(text))) preview = " Photo";
+  else if(type === "video") preview = " Video";
   replyBarText.innerText = preview;
 
   let thumbHtml = "";
@@ -2665,8 +2666,8 @@ window.send = async function() {
     let replyPreview = replyingTo.text ? replyingTo.text.substring(0, 80) : "";
     if(replyingTo.text && replyingTo.text.startsWith("__voice__")) replyPreview = "🎤 Voice message";
     else if(replyingTo.text && replyingTo.text.startsWith("__gif__")) replyPreview = "🎞️ GIF";
-    else if(replyingTo.type === "image" || (replyingTo.text && isImageUrl(replyingTo.text))) replyPreview = "📷 Photo";
-    else if(replyingTo.type === "video") replyPreview = "🎥 Video";
+    else if(replyingTo.type === "image" || (replyingTo.text && isImageUrl(replyingTo.text))) replyPreview = " Photo";
+    else if(replyingTo.type === "video") replyPreview = " Video";
 
     let replyToObj = {
       key: replyingTo.key,
@@ -2914,10 +2915,10 @@ onChildAdded(ref(db,"messages"),data=>{
     const now=new Date()
     const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
     let notifText = message.text
-    if(message.text.startsWith("__voice__")) notifText = "🎤 Voice message"
+    if(message.text.startsWith("__voice__")) notifText = " Voice message"
     else if(message.text.startsWith("__gif__")) notifText = "🎞️ GIF"
-    else if(message.type === "image") notifText = "📷 Photo"
-    else if(message.type === "video") notifText = "🎥 Video"
+    else if(message.type === "image") notifText = " Photo"
+    else if(message.type === "video") notifText = " Video"
     fetch(BACKEND+"/notify",{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({text:notifText,time})
