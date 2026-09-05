@@ -269,6 +269,18 @@ transition:transform 0.15s;
   opacity: 1;
 }
 
+#menuBackdrop {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: transparent;
+  z-index: 99;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+#menuBackdrop.active { opacity: 1; }
+
 .menuProfileSection {
   display: flex;
   align-items: center;
@@ -1337,6 +1349,7 @@ body.dark-theme .mediaSheetItem span { color: #e9edef; }
 </div>
 
 <!-- ✅ 3-DOT MENU UI — Instagram / WhatsApp Style -->
+<div id="menuBackdrop"></div>
 <div id="menuBox">
   <div class="menuProfileSection">
     <div class="menuAvatarContainer">
@@ -1619,7 +1632,7 @@ const headerName = document.getElementById("headerName")
 let seenListener = null
 
 // ─────────────────────────────────────────────
-// GIF ON/OFF TOGGLE
+// GIF ON/OFF TOGGLE (Per User - Firebase)
 // ─────────────────────────────────────────────
 let gifEnabled = false
 let _gifRef = null
@@ -1632,15 +1645,13 @@ function updateGifToggleLabel(){
 }
 
 function listenGifSuggestions(){
-  _gifRef = ref(db, "gifSuggestions")
+  _gifRef = ref(db, "userSettings/" + username + "/gifSuggestions")
   onValue(_gifRef, snap => {
     const val = snap.val()
 
     if (val === null) {
-      const legacyVal = localStorage.getItem("gifSuggestions")
-      const migratedVal = legacyVal === "on" ? "on" : "off"
-      set(ref(db, "gifSuggestions"), migratedVal).catch(()=>{})
-      gifEnabled = migratedVal === "on"
+      gifEnabled = false
+      set(ref(db, "userSettings/" + username + "/gifSuggestions"), "off").catch(()=>{})
     } else {
       gifEnabled = val === "on"
     }
@@ -1655,7 +1666,7 @@ window.toggleGifSuggestions = function(){
   gifEnabled = newVal
   updateGifToggleLabel()
   if(!gifEnabled) hideGifPanel()
-  set(ref(db, "gifSuggestions"), newVal ? "on" : "off").catch(()=>{})
+  set(ref(db, "userSettings/" + username + "/gifSuggestions"), newVal ? "on" : "off").catch(()=>{})
 }
 
 updateGifToggleLabel()
@@ -1737,12 +1748,12 @@ function refreshAllDisplayNames(){
 }
 
 // ════════════════════════
-// DARK THEME — Firebase sync
+// DARK THEME — Firebase sync (Per User)
 // ════════════════════════
 let _themeRef = null
 
 function listenTheme() {
-  _themeRef = ref(db, "theme")
+  _themeRef = ref(db, "userSettings/" + username + "/theme")
   onValue(_themeRef, snap => {
     const isDark = snap.val() === "dark"
     applyTheme(isDark)
@@ -1798,7 +1809,7 @@ window.toggleDarkTheme = function(e) {
     else sw.classList.remove("active")
   }
 
-  set(ref(db, "theme"), newTheme)
+  set(ref(db, "userSettings/" + username + "/theme"), newTheme)
     .then(() => console.log("[Theme] Saved to Firebase:", newTheme))
     .catch(err => console.error("[Theme] Firebase write FAILED:", err))
 }
@@ -2990,15 +3001,55 @@ window.openMenuBox = function(){
   m.style.display="block"
   void m.offsetWidth
   m.classList.add("menu-open")
+  
+  const b = document.getElementById("menuBackdrop")
+  if(b) {
+    b.style.display = "block"
+    void b.offsetWidth
+    b.classList.add("active")
+  }
+  
+  if (!history.state || !history.state.menuOpen) {
+    history.pushState({ menuOpen: true }, "")
+  }
 }
 
 window.closeMenuBox = function(){
   const m=document.getElementById("menuBox")
   if(!m) return
-  if(!m.classList.contains("menu-open")){ m.style.display="none"; return }
+  if(!m.classList.contains("menu-open")){ 
+    m.style.display="none"
+    const b = document.getElementById("menuBackdrop")
+    if(b) b.style.display="none"
+    return 
+  }
   m.classList.remove("menu-open")
-  setTimeout(()=>{ if(m) m.style.display="none" }, 180)
+  const b = document.getElementById("menuBackdrop")
+  if(b) b.classList.remove("active")
+  setTimeout(()=>{ 
+    if(m) m.style.display="none"
+    if(b) b.style.display="none"
+  }, 180)
+  
+  if (history.state && history.state.menuOpen) {
+    history.back()
+  }
 }
+
+document.getElementById("menuBackdrop").addEventListener("click", ()=>{ closeMenuBox() })
+
+window.addEventListener('popstate', (event) => {
+  const m = document.getElementById("menuBox")
+  if (m && m.classList.contains("menu-open")) {
+    m.classList.remove("menu-open")
+    const b = document.getElementById("menuBackdrop")
+    if(b) b.classList.remove("active")
+    setTimeout(()=>{ 
+      if(m) m.style.display="none"
+      if(b) b.style.display="none"
+    }, 180)
+  }
+})
 
 window.toggleMenu=function(){
   const m=document.getElementById("menuBox")
@@ -3494,33 +3545,6 @@ window.toggleSpeaker = function(){
   const lbl=document.getElementById("speakerLabel")
   btn.style.background=isSpeakerOn?"rgba(255,255,255,0.4)":"rgba(255,255,255,0.15)"
   lbl.innerText=isSpeakerOn?"Speaker On":"Speaker"
-}
-
-// ─────────────────────────────────────────────
-// MENU DUPLICATE CLEANUP (Fix for extra profile row injected by other scripts)
-// ─────────────────────────────────────────────
-const menuBoxEl = document.getElementById("menuBox");
-if (menuBoxEl) {
-  const cleanMenu = () => {
-    // Remove any extra profile sections
-    const profileSections = menuBoxEl.querySelectorAll('.menuProfileSection');
-    profileSections.forEach((sec, index) => {
-      if (index > 0) sec.remove();
-    });
-    
-    // Remove any menu item that contains "Upload Story" (if injected as a list item)
-    const menuItems = menuBoxEl.querySelectorAll('.menuItem, div');
-    menuItems.forEach(item => {
-      if (item.classList.contains('menuItem') && item.textContent.includes('Upload Story')) {
-        item.remove();
-      }
-    });
-  };
-  
-  // Run initially and observe for changes
-  cleanMenu();
-  const observer = new MutationObserver(cleanMenu);
-  observer.observe(menuBoxEl, { childList: true, subtree: true });
 }
 
 </script>
