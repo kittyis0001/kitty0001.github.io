@@ -3496,6 +3496,33 @@ window.toggleSpeaker = function(){
   lbl.innerText=isSpeakerOn?"Speaker On":"Speaker"
 }
 
+// ─────────────────────────────────────────────
+// MENU DUPLICATE CLEANUP (Fix for extra profile row injected by other scripts)
+// ─────────────────────────────────────────────
+const menuBoxEl = document.getElementById("menuBox");
+if (menuBoxEl) {
+  const cleanMenu = () => {
+    // Remove any extra profile sections
+    const profileSections = menuBoxEl.querySelectorAll('.menuProfileSection');
+    profileSections.forEach((sec, index) => {
+      if (index > 0) sec.remove();
+    });
+    
+    // Remove any menu item that contains "Upload Story" (if injected as a list item)
+    const menuItems = menuBoxEl.querySelectorAll('.menuItem, div');
+    menuItems.forEach(item => {
+      if (item.classList.contains('menuItem') && item.textContent.includes('Upload Story')) {
+        item.remove();
+      }
+    });
+  };
+  
+  // Run initially and observe for changes
+  cleanMenu();
+  const observer = new MutationObserver(cleanMenu);
+  observer.observe(menuBoxEl, { childList: true, subtree: true });
+}
+
 </script>
 
 <!-- Image Viewer -->
