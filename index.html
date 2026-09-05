@@ -2399,7 +2399,7 @@ function startReply(key, name, text, type, duration){
   replyBarName.innerText = getNick(name);
   let preview = text ? text.substring(0,60) : "";
   if(text && text.startsWith("__voice__")) preview = " Voice message";
-  else if(text && text.startsWith("__gif__")) preview = "🎞️ GIF";
+  else if(text && text.startsWith("__gif__")) preview = " GIF";
   else if(type === "image" || (text && isImageUrl(text))) preview = " Photo";
   else if(type === "video") preview = " Video";
   replyBarText.innerText = preview;
@@ -2664,8 +2664,8 @@ window.send = async function() {
 
   if(replyingTo) {
     let replyPreview = replyingTo.text ? replyingTo.text.substring(0, 80) : "";
-    if(replyingTo.text && replyingTo.text.startsWith("__voice__")) replyPreview = "🎤 Voice message";
-    else if(replyingTo.text && replyingTo.text.startsWith("__gif__")) replyPreview = "🎞️ GIF";
+    if(replyingTo.text && replyingTo.text.startsWith("__voice__")) replyPreview = " Voice message";
+    else if(replyingTo.text && replyingTo.text.startsWith("__gif__")) replyPreview = " GIF";
     else if(replyingTo.type === "image" || (replyingTo.text && isImageUrl(replyingTo.text))) replyPreview = " Photo";
     else if(replyingTo.type === "video") replyPreview = " Video";
 
@@ -2916,7 +2916,7 @@ onChildAdded(ref(db,"messages"),data=>{
     const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
     let notifText = message.text
     if(message.text.startsWith("__voice__")) notifText = " Voice message"
-    else if(message.text.startsWith("__gif__")) notifText = "🎞️ GIF"
+    else if(message.text.startsWith("__gif__")) notifText = " GIF"
     else if(message.type === "image") notifText = " Photo"
     else if(message.type === "video") notifText = " Video"
     fetch(BACKEND+"/notify",{
