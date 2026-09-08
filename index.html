@@ -3731,15 +3731,11 @@ let screenSharePC = null;
 let screenShareStream = null;
 let screenShareSessionId = null;
 let screenShareListeners = [];
-let screenShareRetryCount = 0;
-let screenShareReconnectTimer = null;
-let _screenSharePrefRef = null;
 let _incomingSSListener = null;
 let isScreenShareReceiver = false;
 let screenShareActiveSession = null;
 
 // ─── Bulletproof Event Binding ───
-// Ensures the click event fires even if story.js overwrites the menu
 function bindScreenShareToggle() {
   const item = document.getElementById('screenShareItem');
   if (item && !item.dataset.ssBound) {
@@ -3751,13 +3747,11 @@ function bindScreenShareToggle() {
     });
   }
 }
-// Check periodically in case story.js rebuilds the menu
 setInterval(bindScreenShareToggle, 1000);
 bindScreenShareToggle();
 
 // ─── Toggle handler ───
 window.toggleScreenShare = async function(e) {
-  // Safely handle event to prevent crashes
   if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
   
   if (!username) { alert("Please login first"); return; }
@@ -3772,52 +3766,48 @@ window.toggleScreenShare = async function(e) {
 
 // ─── Start screen share (sender) ───
 async function startScreenShare() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    alert("Screen Share is not supported on this browser.");
+    return;
+  }
+
   const item = document.getElementById("screenShareItem");
   if (item) item.classList.add("loading");
 
   try {
-    // Check for existing session — prevent duplicates
+    // 1. Clean up any existing session (prevent duplicates)
     if (screenSharePC || screenShareStream) {
       await cleanupScreenShareSender();
     }
 
-    // Request screen capture (entire screen, with optional audio)
+    // 2. Request screen capture IMMEDIATELY (Preserves Android User Gesture)
     screenShareStream = await navigator.mediaDevices.getDisplayMedia({
       video: {
-        frameRate: { ideal: 30, max: 60 },
-        height: { ideal: 1080, max: 2160 },
-        width: { ideal: 1920, max: 3840 }
+        frameRate: { ideal: 30, max: 60 }
       },
-      audio: true // Request audio sharing if supported
+      audio: true
     });
 
-    // Detect when user stops sharing via browser native UI
+    // 3. Handle native browser Stop button
     const videoTrack = screenShareStream.getVideoTracks()[0];
     if (videoTrack) {
-      videoTrack.addEventListener("ended", () => {
+      videoTrack.onended = () => {
         stopScreenShare(true);
-      });
+      };
     }
 
-    // Generate unique session ID
+    // 4. Setup Session
     screenShareSessionId = username + "_ss_" + Date.now();
-
-    // Create peer connection
     await createScreenSharePC();
-
-    // Add tracks to peer connection
+    
     screenShareStream.getTracks().forEach(track => {
       screenSharePC.addTrack(track, screenShareStream);
     });
 
-    // Create offer
-    const offer = await screenSharePC.createOffer({
-      offerToReceiveVideo: false,
-      offerToReceiveAudio: false
-    });
+    const offer = await screenSharePC.createOffer();
     await screenSharePC.setLocalDescription(offer);
 
-    // Save session to Firebase
+    // 5. Save to Firebase
     await set(ref(db, "screenShares/" + screenShareSessionId), {
       sender: username,
       receiver: otherUser,
@@ -3826,52 +3816,13 @@ async function startScreenShare() {
       time: Date.now()
     });
 
-    // Update UI state
+    // 6. Update UI & State
     screenShareEnabled = true;
     screenShareActiveSession = screenShareSessionId;
     updateScreenShareToggle();
-    saveScreenSharePreference(true);
-    showScreenShareStatus("Sharing screen with " + getNick(otherUser), false);
+    showScreenShareStatus("Sharing screen...", false);
 
-    // Listen for answer from receiver
-    const ansRef = ref(db, "screenShares/" + screenShareSessionId + "/answer");
-    const ansListener = onValue(ansRef, async snap => {
-      const answer = snap.val();
-      if (answer && screenSharePC && screenSharePC.signalingState !== "stable") {
-        try {
-          await screenSharePC.setRemoteDescription(new RTCSessionDescription(answer));
-          showScreenShareStatus("Connected", false);
-          setTimeout(() => hideScreenShareStatus(), 2000);
-        } catch (err) {
-          console.error("[ScreenShare] Set remote desc failed:", err);
-        }
-      }
-    });
-    screenShareListeners.push({ ref: ansRef, fn: ansListener, type: "value" });
-
-    // Listen for ICE candidates from receiver
-    const candRef = ref(db, "screenShares/" + screenShareSessionId + "/candidates/" + otherUser);
-    const candListener = onChildAdded(candRef, async snap => {
-      const candidate = snap.val();
-      if (candidate && screenSharePC) {
-        try {
-          await screenSharePC.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.warn("[ScreenShare] ICE candidate add failed:", err);
-        }
-      }
-    });
-    screenShareListeners.push({ ref: candRef, fn: candListener, type: "child_added" });
-
-    // Listen for status changes (receiver ended, etc.)
-    const statusRef = ref(db, "screenShares/" + screenShareSessionId + "/status");
-    const statusListener = onValue(statusRef, snap => {
-      const status = snap.val();
-      if (status === "ended" || status === "rejected") {
-        stopScreenShare(false);
-      }
-    });
-    screenShareListeners.push({ ref: statusRef, fn: statusListener, type: "value" });
+    setupScreenShareListeners();
 
     if (item) item.classList.remove("loading");
 
@@ -3879,31 +3830,55 @@ async function startScreenShare() {
     console.error("[ScreenShare] Start failed:", err);
     if (item) item.classList.remove("loading");
 
-    let msg = "Screen share failed";
     if (err.name === "NotAllowedError" || err.name === "SecurityError") {
-      msg = "Screen share permission denied";
-    } else if (err.name === "NotFoundError") {
-      msg = "No screen capture source available";
-    } else if (err.name === "NotReadableError") {
-      msg = "Screen is already being shared by another app";
-    } else if (err.message) {
-      msg = err.message;
+      // User cancelled or denied. Do nothing, just reset toggle.
+    } else {
+      alert("Screen Share failed: " + err.message);
     }
 
-    showScreenShareStatus(msg, false);
-    setTimeout(() => hideScreenShareStatus(), 3000);
-
-    // Full cleanup of partial state
     await cleanupScreenShareSender();
     screenShareEnabled = false;
     updateScreenShareToggle();
-    saveScreenSharePreference(false);
   }
 }
 
-// ─── Create WebRTC peer connection for screen share ───
+function setupScreenShareListeners() {
+  // Answer listener
+  const ansRef = ref(db, "screenShares/" + screenShareSessionId + "/answer");
+  const ansCb = async (snap) => {
+    const answer = snap.val();
+    if (answer && screenSharePC && screenSharePC.signalingState !== "stable") {
+      try {
+        await screenSharePC.setRemoteDescription(new RTCSessionDescription(answer));
+        showScreenShareStatus("Connected", false);
+        setTimeout(hideScreenShareStatus, 2000);
+      } catch (e) {}
+    }
+  };
+  onValue(ansRef, ansCb);
+  screenShareListeners.push({ ref: ansRef, cb: ansCb, type: "value" });
+
+  // ICE candidates
+  const candRef = ref(db, "screenShares/" + screenShareSessionId + "/candidates/" + otherUser);
+  const candCb = async (snap) => {
+    const candidate = snap.val();
+    if (candidate && screenSharePC) {
+      try { await screenSharePC.addIceCandidate(new RTCIceCandidate(candidate)); } catch (e) {}
+    }
+  };
+  onChildAdded(candRef, candCb);
+  screenShareListeners.push({ ref: candRef, cb: candCb, type: "child_added" });
+
+  // Status listener
+  const statusRef = ref(db, "screenShares/" + screenShareSessionId + "/status");
+  const statusCb = (snap) => {
+    if (snap.val() === "ended") stopScreenShare(false);
+  };
+  onValue(statusRef, statusCb);
+  screenShareListeners.push({ ref: statusRef, cb: statusCb, type: "value" });
+}
+
 async function createScreenSharePC() {
-  // Close existing connection if any (prevent duplicates)
   if (screenSharePC) {
     try { screenSharePC.close(); } catch (e) {}
     screenSharePC = null;
@@ -3911,163 +3886,60 @@ async function createScreenSharePC() {
 
   screenSharePC = new RTCPeerConnection(ICE_SERVERS);
 
-  // ICE candidate handler
-  screenSharePC.onicecandidate = e => {
+  screenSharePC.onicecandidate = (e) => {
     if (e.candidate && screenShareSessionId) {
-      push(ref(db, "screenShares/" + screenShareSessionId + "/candidates/" + username), e.candidate.toJSON()).catch(() => {});
+      push(ref(db, "screenShares/" + screenShareSessionId + "/candidates/" + username), e.candidate.toJSON()).catch(()=>{});
     }
   };
 
-  // ICE connection state — auto recovery
   screenSharePC.oniceconnectionstatechange = () => {
     if (!screenSharePC) return;
     const state = screenSharePC.iceConnectionState;
-
     if (state === "failed") {
-      if (screenShareRetryCount < 3) {
-        screenShareRetryCount++;
-        attemptScreenShareRecovery();
-      } else {
-        showScreenShareStatus("Connection failed. Stopping...", true);
-        setTimeout(() => stopScreenShare(true), 2000);
-      }
-    } else if (state === "disconnected") {
-      showScreenShareStatus("Reconnecting...", true);
-      if (screenShareReconnectTimer) clearTimeout(screenShareReconnectTimer);
-      screenShareReconnectTimer = setTimeout(() => {
-        if (screenSharePC && screenSharePC.iceConnectionState === "disconnected") {
-          attemptScreenShareRecovery();
-        }
-      }, 5000);
-    } else if (state === "connected" || state === "completed") {
-      screenShareRetryCount = 0;
-      if (screenShareReconnectTimer) {
-        clearTimeout(screenShareReconnectTimer);
-        screenShareReconnectTimer = null;
-      }
-    }
-  };
-
-  // Connection state — fatal failure handling
-  screenSharePC.onconnectionstatechange = () => {
-    if (!screenSharePC) return;
-    const state = screenSharePC.connectionState;
-
-    if (state === "failed") {
-      if (screenShareRetryCount < 3) {
-        screenShareRetryCount++;
-        attemptScreenShareRecovery();
-      } else {
-        stopScreenShare(true);
-      }
-    }
-  };
-
-  // Negotiation needed (for renegotiation on recovery)
-  screenSharePC.onnegotiationneeded = async () => {
-    if (!screenSharePC || screenSharePC.signalingState !== "stable") return;
-    try {
-      const offer = await screenSharePC.createOffer();
-      await screenSharePC.setLocalDescription(offer);
-      if (screenShareSessionId) {
-        await update(ref(db, "screenShares/" + screenShareSessionId), {
-          offer: { type: offer.type, sdp: offer.sdp },
-          status: "reconnecting",
-          time: Date.now()
-        });
-      }
-    } catch (err) {
-      console.error("[ScreenShare] Renegotiation failed:", err);
+      stopScreenShare(true);
     }
   };
 }
 
-// ─── Attempt ICE restart / recovery ───
-async function attemptScreenShareRecovery() {
-  if (!screenSharePC || !screenShareEnabled) return;
-  try {
-    showScreenShareStatus("Reconnecting...", true);
-    const offer = await screenSharePC.createOffer({ iceRestart: true });
-    await screenSharePC.setLocalDescription(offer);
-    if (screenShareSessionId) {
-      await update(ref(db, "screenShares/" + screenShareSessionId), {
-        offer: { type: offer.type, sdp: offer.sdp },
-        status: "reconnecting",
-        time: Date.now()
-      });
-    }
-  } catch (err) {
-    console.error("[ScreenShare] Recovery failed:", err);
-    stopScreenShare(true);
-  }
-}
-
-// ─── Stop screen share (sender) ───
 async function stopScreenShare(notifyReceiver) {
   await cleanupScreenShareSender();
 
   if (notifyReceiver && screenShareSessionId) {
     try {
-      await update(ref(db, "screenShares/" + screenShareSessionId), {
-        status: "ended",
-        time: Date.now()
-      });
-      // Schedule stale data removal
+      await update(ref(db, "screenShares/" + screenShareSessionId), { status: "ended", time: Date.now() });
       const sid = screenShareSessionId;
-      setTimeout(() => {
-        remove(ref(db, "screenShares/" + sid)).catch(() => {});
-      }, 5000);
-    } catch (err) {
-      console.warn("[ScreenShare] Failed to notify receiver:", err);
-    }
+      setTimeout(() => { remove(ref(db, "screenShares/" + sid)).catch(()=>{}); }, 5000);
+    } catch (e) {}
   }
 
   screenShareSessionId = null;
   screenShareActiveSession = null;
   screenShareEnabled = false;
-  screenShareRetryCount = 0;
 
   updateScreenShareToggle();
-  saveScreenSharePreference(false);
   hideScreenShareStatus();
 
   const item = document.getElementById("screenShareItem");
   if (item) item.classList.remove("loading");
 }
 
-// ─── Cleanup sender resources ───
 async function cleanupScreenShareSender() {
-  // Close peer connection
   if (screenSharePC) {
     try { screenSharePC.close(); } catch (e) {}
     screenSharePC = null;
   }
 
-  // Stop all media tracks
   if (screenShareStream) {
-    screenShareStream.getTracks().forEach(t => {
-      try { t.stop(); } catch (e) {}
-    });
+    screenShareStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
     screenShareStream = null;
   }
 
-  // Remove all Firebase listeners
-  screenShareListeners.forEach(({ ref: r, fn, type }) => {
-    try {
-      if (type === "child_added") off(r, "child_added", fn);
-      else off(r, "value", fn);
-    } catch (e) {}
+  screenShareListeners.forEach(({ ref: r, cb, type }) => {
+    try { off(r, type, cb); } catch (e) {}
   });
   screenShareListeners = [];
-
-  // Clear reconnect timer
-  if (screenShareReconnectTimer) {
-    clearTimeout(screenShareReconnectTimer);
-    screenShareReconnectTimer = null;
-  }
 }
 
-// ─── Update toggle UI ───
 function updateScreenShareToggle() {
   const sw = document.getElementById("screenShareSwitch");
   if (sw) {
@@ -4076,31 +3948,6 @@ function updateScreenShareToggle() {
   }
 }
 
-// ─── Save preference to Firebase (per user UID) ───
-function saveScreenSharePreference(state) {
-  if (!username) return;
-  set(ref(db, "userSettings/" + username + "/screenShare"), state ? "on" : "off").catch(() => {});
-}
-
-// ─── Listen for preference (restore state on login) ───
-function listenScreenSharePreference() {
-  if (!username) return;
-  if (_screenSharePrefRef) {
-    try { off(_screenSharePrefRef, "value"); } catch (e) {}
-  }
-  _screenSharePrefRef = ref(db, "userSettings/" + username + "/screenShare");
-  onValue(_screenSharePrefRef, snap => {
-    const val = snap.val();
-    if (val === null) {
-      // Initialize as off for new users
-      set(_screenSharePrefRef, "off").catch(() => {});
-    }
-    // We do NOT auto-start screen share on login — user must explicitly toggle
-    // This ensures security (permission required every new share session)
-  });
-}
-
-// ─── Status display ───
 function showScreenShareStatus(text, spinner) {
   const el = document.getElementById("screenShareStatus");
   if (!el) return;
@@ -4118,152 +3965,90 @@ function hideScreenShareStatus() {
 
 function listenIncomingScreenShares() {
   if (_incomingSSListener) return;
-  _incomingSSListener = onValue(ref(db, "screenShares"), snap => {
+  _incomingSSListener = onValue(ref(db, "screenShares"), (snap) => {
     const shares = snap.val();
     if (!shares) return;
 
     Object.entries(shares).forEach(([sessionId, data]) => {
-      // Only process sessions meant for me from my chat partner
       if (data.receiver !== username || data.sender !== otherUser) return;
 
       if (data.status === "offering" || data.status === "reconnecting") {
-        // Don't accept if I'm already the sender in an active session
-        if (screenShareEnabled) return;
-
-        if (!isScreenShareReceiver || screenShareActiveSession !== sessionId) {
+        if (!screenShareEnabled && (!isScreenShareReceiver || screenShareActiveSession !== sessionId)) {
           acceptIncomingScreenShare(sessionId, data);
         }
       } else if (data.status === "ended") {
-        if (isScreenShareReceiver) {
-          cleanupReceiverScreenShare();
-        }
-        // Clean up stale session data
-        remove(ref(db, "screenShares/" + sessionId)).catch(() => {});
+        if (isScreenShareReceiver) cleanupReceiverScreenShare();
+        remove(ref(db, "screenShares/" + sessionId)).catch(()=>{});
       }
     });
   });
 }
 
 async function acceptIncomingScreenShare(sessionId, data) {
-  // Clean up any existing receiver session first (prevent duplicates)
-  if (isScreenShareReceiver) {
-    cleanupReceiverScreenShare();
-  }
-
+  if (isScreenShareReceiver) cleanupReceiverScreenShare();
   isScreenShareReceiver = true;
   screenShareActiveSession = sessionId;
 
   try {
-    // Create fresh peer connection
-    if (screenSharePC) {
-      try { screenSharePC.close(); } catch (e) {}
-      screenSharePC = null;
-    }
-
+    if (screenSharePC) { screenSharePC.close(); screenSharePC = null; }
     screenSharePC = new RTCPeerConnection(ICE_SERVERS);
 
-    // Handle incoming track (the screen share stream)
-    screenSharePC.ontrack = e => {
-      if (e.streams && e.streams[0]) {
-        const video = document.getElementById("screenShareVideo");
-        if (video) {
-          // Clean up previous stream
-          if (video.srcObject) {
-            try { video.srcObject.getTracks().forEach(t => t.stop()); } catch (e2) {}
-          }
-          video.srcObject = e.streams[0];
-          video.play().catch(() => {});
-
-          // Detect stream ended (sender stopped)
-          e.streams[0].getTracks().forEach(track => {
-            track.addEventListener("ended", () => {
-              cleanupReceiverScreenShare();
-            });
-          });
-        }
-        document.getElementById("screenShareViewer").classList.add("active");
-        document.getElementById("screenSharePill").classList.remove("show");
+    screenSharePC.ontrack = (e) => {
+      const video = document.getElementById("screenShareVideo");
+      if (video) {
+        video.srcObject = e.streams[0];
+        video.play().catch(()=>{});
+        e.streams[0].getTracks().forEach(track => {
+          track.onended = () => cleanupReceiverScreenShare();
+        });
       }
+      document.getElementById("screenShareViewer").classList.add("active");
+      document.getElementById("screenSharePill").classList.remove("show");
     };
 
-    // ICE candidate handler
-    screenSharePC.onicecandidate = e => {
-      if (e.candidate) {
-        push(ref(db, "screenShares/" + sessionId + "/candidates/" + username), e.candidate.toJSON()).catch(() => {});
-      }
+    screenSharePC.onicecandidate = (e) => {
+      if (e.candidate) push(ref(db, "screenShares/" + sessionId + "/candidates/" + username), e.candidate.toJSON()).catch(()=>{});
     };
 
-    // ICE state monitoring
-    screenSharePC.oniceconnectionstatechange = () => {
-      if (!screenSharePC) return;
-      const state = screenSharePC.iceConnectionState;
-      if (state === "failed") {
-        showScreenShareStatus("Connection issue, retrying...", true);
-      } else if (state === "connected") {
-        hideScreenShareStatus();
-      }
-    };
-
-    screenSharePC.onconnectionstatechange = () => {
-      if (!screenSharePC) return;
-      const state = screenSharePC.connectionState;
-      if (state === "failed" || state === "closed") {
-        if (isScreenShareReceiver) {
-          cleanupReceiverScreenShare();
-        }
-      }
-    };
-
-    // Set remote description (sender's offer)
     await screenSharePC.setRemoteDescription(new RTCSessionDescription(data.offer));
-
-    // Create and set answer
     const answer = await screenSharePC.createAnswer();
     await screenSharePC.setLocalDescription(answer);
 
-    // Send answer back to sender
     await update(ref(db, "screenShares/" + sessionId), {
       answer: { type: answer.type, sdp: answer.sdp },
       status: "active"
     });
 
-    // Listen for additional ICE candidates from sender (renegotiation, etc.)
     const candRef = ref(db, "screenShares/" + sessionId + "/candidates/" + otherUser);
-    const candListener = onChildAdded(candRef, async snap => {
-      const candidate = snap.val();
-      if (candidate && screenSharePC) {
-        try {
-          await screenSharePC.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {}
+    const candCb = async (snap) => {
+      if (snap.val() && screenSharePC) {
+        try { await screenSharePC.addIceCandidate(new RTCIceCandidate(snap.val())); } catch (e) {}
       }
-    });
-    screenShareListeners.push({ ref: candRef, fn: candListener, type: "child_added" });
+    };
+    onChildAdded(candRef, candCb);
+    screenShareListeners.push({ ref: candRef, cb: candCb, type: "child_added" });
 
-    // Listen for status changes
     const statusRef = ref(db, "screenShares/" + sessionId + "/status");
-    const statusListener = onValue(statusRef, snap => {
-      const status = snap.val();
-      if (status === "ended") {
+    const statusCb = (snap) => {
+      if (snap.val() === "ended") {
         cleanupReceiverScreenShare();
-        remove(ref(db, "screenShares/" + sessionId)).catch(() => {});
+        remove(ref(db, "screenShares/" + sessionId)).catch(()=>{});
       }
-    });
-    screenShareListeners.push({ ref: statusRef, fn: statusListener, type: "value" });
+    };
+    onValue(statusRef, statusCb);
+    screenShareListeners.push({ ref: statusRef, cb: statusCb, type: "value" });
 
   } catch (err) {
-    console.error("[ScreenShare] Receiver setup failed:", err);
     cleanupReceiverScreenShare();
   }
 }
 
 function cleanupReceiverScreenShare() {
-  // Close peer connection
   if (screenSharePC) {
     try { screenSharePC.close(); } catch (e) {}
     screenSharePC = null;
   }
 
-  // Clear video element
   const video = document.getElementById("screenShareVideo");
   if (video) {
     if (video.srcObject) {
@@ -4272,18 +4057,13 @@ function cleanupReceiverScreenShare() {
     video.srcObject = null;
   }
 
-  // Hide viewer and pill
   const viewer = document.getElementById("screenShareViewer");
   if (viewer) viewer.classList.remove("active");
   const pill = document.getElementById("screenSharePill");
   if (pill) pill.classList.remove("show");
 
-  // Remove Firebase listeners
-  screenShareListeners.forEach(({ ref: r, fn, type }) => {
-    try {
-      if (type === "child_added") off(r, "child_added", fn);
-      else off(r, "value", fn);
-    } catch (e) {}
+  screenShareListeners.forEach(({ ref: r, cb, type }) => {
+    try { off(r, type, cb); } catch (e) {}
   });
   screenShareListeners = [];
 
@@ -4295,10 +4075,7 @@ function cleanupReceiverScreenShare() {
 // ─── Viewer controls ───
 document.getElementById("ssCloseBtn").addEventListener("click", async () => {
   if (screenShareActiveSession) {
-    await update(ref(db, "screenShares/" + screenShareActiveSession), {
-      status: "ended",
-      time: Date.now()
-    }).catch(() => {});
+    await update(ref(db, "screenShares/" + screenShareActiveSession), { status: "ended", time: Date.now() }).catch(()=>{});
   }
   cleanupReceiverScreenShare();
 });
@@ -4313,28 +4090,6 @@ document.getElementById("screenSharePill").addEventListener("click", () => {
   document.getElementById("screenShareViewer").classList.add("active");
 });
 
-// ─── Page lifecycle handlers ───
-window.addEventListener("beforeunload", () => {
-  if (screenShareEnabled) {
-    // Sync stop
-    if (screenShareSessionId) {
-      update(ref(db, "screenShares/" + screenShareSessionId), {
-        status: "ended",
-        time: Date.now()
-      }).catch(() => {});
-    }
-  }
-});
-
-window.addEventListener("pagehide", () => {
-  if (screenShareEnabled && screenShareSessionId) {
-    update(ref(db, "screenShares/" + screenShareSessionId), {
-      status: "ended",
-      time: Date.now()
-    }).catch(() => {});
-  }
-});
-
 // ─── Auto-cleanup stale sessions on login ───
 function cleanupStaleScreenShares() {
   if (!username || !otherUser) return;
@@ -4342,34 +4097,28 @@ function cleanupStaleScreenShares() {
     const data = snap.val();
     if (!data) return;
     Object.entries(data).forEach(([sid, sdata]) => {
-      // Remove sessions older than 5 minutes
       if (sdata.time && (Date.now() - sdata.time > 300000)) {
-        remove(ref(db, "screenShares/" + sid)).catch(() => {});
+        remove(ref(db, "screenShares/" + sid)).catch(()=>{});
       }
-      // Remove sessions where I'm sender but stream is dead
       if (sdata.sender === username && sdata.status === "ended") {
-        remove(ref(db, "screenShares/" + sid)).catch(() => {});
+        remove(ref(db, "screenShares/" + sid)).catch(()=>{});
       }
     });
-  }).catch(() => {});
+  }).catch(()=>{});
 }
 
 // ─── Initialize on login (wraps existing start function) ───
 const _originalStartSS = window.start;
 window.start = async function() {
   await _originalStartSS.apply(this, arguments);
-  // Initialize screen share listeners after login
   setTimeout(() => {
-    listenScreenSharePreference();
     listenIncomingScreenShares();
     cleanupStaleScreenShares();
-    // Ensure toggle is OFF on fresh login
     screenShareEnabled = false;
     updateScreenShareToggle();
   }, 500);
 };
 
-// ─── Initialize toggle state ───
 updateScreenShareToggle();
 bindScreenShareToggle();
 
