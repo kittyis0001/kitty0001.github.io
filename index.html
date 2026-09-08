@@ -3733,51 +3733,35 @@ let screenShareSessionId = null;
 let screenShareListeners = [];
 let screenShareRetryCount = 0;
 let screenShareReconnectTimer = null;
-let screenShareInitTimer = null;
 let _screenSharePrefRef = null;
 let _incomingSSListener = null;
 let isScreenShareReceiver = false;
 let screenShareActiveSession = null;
-let screenShareCleanupTimer = null;
 
-// ─── DOM Injector: Ensures the menu item exists even if story.js overwrites it ───
-function injectScreenShareMenuItem() {
-  if (document.getElementById('screenShareItem')) return;
-  const darkThemeItem = document.getElementById('darkThemeItem');
-  if (darkThemeItem && darkThemeItem.parentNode) {
-    const ssItem = document.createElement('div');
-    ssItem.className = 'menuItem';
-    ssItem.id = 'screenShareItem';
-    ssItem.onclick = (e) => window.toggleScreenShare(e);
-    ssItem.innerHTML = `
-      <div class="menuIconBox">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="4" width="20" height="13" rx="2"></rect>
-          <path d="M8 21h8"></path>
-          <path d="M12 17v4"></path>
-          <path d="M9 11l3-3 3 3"></path>
-          <path d="M12 8v5"></path>
-        </svg>
-      </div>
-      <div class="menuTextGroup">
-        <span class="menuText">Screen Share</span>
-        <span class="menuSubtitle">Share your screen live</span>
-      </div>
-      <div class="menuToggleSwitch" id="screenShareSwitch"></div>
-    `;
-    darkThemeItem.parentNode.insertBefore(ssItem, darkThemeItem.nextSibling);
-    updateScreenShareToggle();
+// ─── Bulletproof Event Binding ───
+// Ensures the click event fires even if story.js overwrites the menu
+function bindScreenShareToggle() {
+  const item = document.getElementById('screenShareItem');
+  if (item && !item.dataset.ssBound) {
+    item.dataset.ssBound = "true";
+    item.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      window.toggleScreenShare(e);
+    });
   }
 }
-
-// Run injection periodically in case story.js rebuilds the menu
-setInterval(injectScreenShareMenuItem, 1000);
+// Check periodically in case story.js rebuilds the menu
+setInterval(bindScreenShareToggle, 1000);
+bindScreenShareToggle();
 
 // ─── Toggle handler ───
 window.toggleScreenShare = async function(e) {
-  if (e) e.stopPropagation();
+  // Safely handle event to prevent crashes
+  if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+  
   if (!username) { alert("Please login first"); return; }
-  if (isBlocked()) { alert("🚫 Messaging is blocked"); return; }
+  if (typeof isBlocked === 'function' && isBlocked()) { alert("🚫 Messaging is blocked"); return; }
 
   if (screenShareEnabled) {
     await stopScreenShare(true);
@@ -3804,24 +3788,14 @@ async function startScreenShare() {
         height: { ideal: 1080, max: 2160 },
         width: { ideal: 1920, max: 3840 }
       },
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true
-      }
+      audio: true // Request audio sharing if supported
     });
 
     // Detect when user stops sharing via browser native UI
     const videoTrack = screenShareStream.getVideoTracks()[0];
     if (videoTrack) {
       videoTrack.addEventListener("ended", () => {
-        console.log("[ScreenShare] Track ended by browser UI");
         stopScreenShare(true);
-      });
-      videoTrack.addEventListener("mute", () => {
-        console.log("[ScreenShare] Track muted (possible suspend)");
-      });
-      videoTrack.addEventListener("unmute", () => {
-        console.log("[ScreenShare] Track unmuted (resumed)");
       });
     }
 
@@ -3894,7 +3868,6 @@ async function startScreenShare() {
     const statusListener = onValue(statusRef, snap => {
       const status = snap.val();
       if (status === "ended" || status === "rejected") {
-        console.log("[ScreenShare] Receiver ended session");
         stopScreenShare(false);
       }
     });
@@ -3949,15 +3922,12 @@ async function createScreenSharePC() {
   screenSharePC.oniceconnectionstatechange = () => {
     if (!screenSharePC) return;
     const state = screenSharePC.iceConnectionState;
-    console.log("[ScreenShare] ICE state:", state);
 
     if (state === "failed") {
       if (screenShareRetryCount < 3) {
         screenShareRetryCount++;
-        console.log("[ScreenShare] ICE failed, attempting restart #" + screenShareRetryCount);
         attemptScreenShareRecovery();
       } else {
-        console.log("[ScreenShare] ICE failed permanently");
         showScreenShareStatus("Connection failed. Stopping...", true);
         setTimeout(() => stopScreenShare(true), 2000);
       }
@@ -3982,7 +3952,6 @@ async function createScreenSharePC() {
   screenSharePC.onconnectionstatechange = () => {
     if (!screenSharePC) return;
     const state = screenSharePC.connectionState;
-    console.log("[ScreenShare] Connection state:", state);
 
     if (state === "failed") {
       if (screenShareRetryCount < 3) {
@@ -3991,8 +3960,6 @@ async function createScreenSharePC() {
       } else {
         stopScreenShare(true);
       }
-    } else if (state === "closed") {
-      // Already cleaned up
     }
   };
 
@@ -4197,7 +4164,6 @@ async function acceptIncomingScreenShare(sessionId, data) {
 
     // Handle incoming track (the screen share stream)
     screenSharePC.ontrack = e => {
-      console.log("[ScreenShare] Received track");
       if (e.streams && e.streams[0]) {
         const video = document.getElementById("screenShareVideo");
         if (video) {
@@ -4211,7 +4177,6 @@ async function acceptIncomingScreenShare(sessionId, data) {
           // Detect stream ended (sender stopped)
           e.streams[0].getTracks().forEach(track => {
             track.addEventListener("ended", () => {
-              console.log("[ScreenShare] Remote track ended");
               cleanupReceiverScreenShare();
             });
           });
@@ -4232,7 +4197,6 @@ async function acceptIncomingScreenShare(sessionId, data) {
     screenSharePC.oniceconnectionstatechange = () => {
       if (!screenSharePC) return;
       const state = screenSharePC.iceConnectionState;
-      console.log("[ScreenShare Receiver] ICE state:", state);
       if (state === "failed") {
         showScreenShareStatus("Connection issue, retrying...", true);
       } else if (state === "connected") {
@@ -4270,9 +4234,7 @@ async function acceptIncomingScreenShare(sessionId, data) {
       if (candidate && screenSharePC) {
         try {
           await screenSharePC.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.warn("[ScreenShare] ICE add failed:", err);
-        }
+        } catch (err) {}
       }
     });
     screenShareListeners.push({ ref: candRef, fn: candListener, type: "child_added" });
@@ -4373,11 +4335,6 @@ window.addEventListener("pagehide", () => {
   }
 });
 
-// Handle orientation change — video auto-adjusts
-window.addEventListener("orientationchange", () => {
-  // Video element handles resize automatically via object-fit: contain
-});
-
 // ─── Auto-cleanup stale sessions on login ───
 function cleanupStaleScreenShares() {
   if (!username || !otherUser) return;
@@ -4414,7 +4371,7 @@ window.start = async function() {
 
 // ─── Initialize toggle state ───
 updateScreenShareToggle();
-injectScreenShareMenuItem();
+bindScreenShareToggle();
 
 </script>
 
